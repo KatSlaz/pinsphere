@@ -1,6 +1,7 @@
 import './MapSidebar.css';
 import { useState } from 'react';
 import { useRef, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 
 function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
     
@@ -45,10 +46,11 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
     // Toggles the visibility of a map by its ID and all its submaps.
     function toggleMap(id) {
         setMaps(prevMaps => {
-            // If All Places is being toggled
-            if (id === 1) {
-                const allPlaces = prevMaps.find(map => map.id === 1);
-                const newVisibility = !allPlaces.visible;
+            
+            const selectedMap = prevMaps.find(map => map.id === id);
+
+            if (selectedMap?.isDefault) {
+                const newVisibility = !selectedMap.visible;
 
                 return prevMaps.map(map => ({
                     ...map,
@@ -87,7 +89,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
 
             // Check if EVERYTHING is now visible
             const everythingVisible = updatedMaps
-                .filter(map => map.id !== 1)
+                .filter(map => !map.isDefault)
                 .every(map =>
                     map.visible &&
                     map.submaps.every(submap => submap.visible)
@@ -95,7 +97,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
 
             // Update All Places based on that
             return updatedMaps.map(map =>
-                map.id === 1
+                map.isDefault
                     ? { ...map, visible: everythingVisible }
                     : map
             );
@@ -129,14 +131,14 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
 
             // Check if every map and every submap is visible
             const everythingVisible = updatedMaps
-                .filter(map => map.id !== 1)
+                .filter(map => !map.isDefault)
                 .every(map =>
                     map.visible &&
                     map.submaps.every(submap => submap.visible)
                 );
 
             return updatedMaps.map(map =>
-                map.id === 1
+                map.isDefault
                     ? { ...map, visible: everythingVisible }
                     : map
             );
@@ -315,22 +317,36 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                                 </button>
 
                                                 <button
-                                                    onClick={(event) => {
+                                                    onClick={async (event) => {
                                                         event.stopPropagation();
 
                                                         if (newSubmapName.trim() === '') return;
+
+                                                        const updatedName = newSubmapName.trim();
+
+                                                        const { error } = await supabase
+                                                            .from('submaps')
+                                                            .update({ name: updatedName })
+                                                            .eq('id', renamingSubmap.submapId);
+
+                                                        if (error) {
+                                                            console.error('Error renaming submap:', error);
+                                                            return;
+                                                        }
 
                                                         setMaps(prevMaps => prevMaps.map(map => map.id === renamingSubmap.mapId ? {
                                                             ...map,
                                                             submaps: map.submaps.map(submap =>
                                                                 submap.id === renamingSubmap.submapId ? {
                                                                     ...submap,
-                                                                    name: newSubmapName.trim()
+                                                                    name: updatedName
                                                                 }
-                                                                :submap
-                                                        )}
-                                                        :map
-                                                        ))
+                                                                : submap
+                                                            )
+                                                        }
+                                                        : map
+                                                        ));
+
                                                         setRenamingSubmap(null);
                                                         setNewSubmapName('');
                                                     }}
@@ -363,22 +379,36 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                                 </button>
 
                                                 <button
-                                                    onClick={() => {
-                                                        setMaps(maps.map(map =>
-                                                        map.id === deletingSubmap.mapId ? {
-                                                            ...map,
-                                                            submaps: map.submaps.filter(
-                                                                submap =>
-                                                                    submap.id !== deletingSubmap.submapId
-                                                            )
+                                                    onClick={async () => {
+                                                        const { error } = await supabase
+                                                            .from('submaps')
+                                                            .delete()
+                                                            .eq('id', deletingSubmap.submapId);
+
+                                                        if (error) {
+                                                            console.error('Error deleting submap:', error);
+                                                            return;
                                                         }
-                                                        :map
-                                                    ))
-                                                    setDeletingSubmap(null);
+
+                                                        setMaps(prevMaps =>
+                                                            prevMaps.map(map =>
+                                                                map.id === deletingSubmap.mapId
+                                                                    ? {
+                                                                        ...map,
+                                                                        submaps: map.submaps.filter(
+                                                                            submap =>
+                                                                                submap.id !== deletingSubmap.submapId
+                                                                        )
+                                                                    }
+                                                                    : map
+                                                            )
+                                                        );
+
+                                                        setDeletingSubmap(null);
                                                     }}
                                                 >
                                                     Delete
-                                                </button>      
+                                                </button>    
                                             </div>
                                         </div>
                                     </div>     
@@ -461,30 +491,51 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                                 Cancel
                                             </button>
 
-                                            <button onClick={() => {
-                                                setMaps(prevMaps => prevMaps.map(map => {
-                                                    if (map.id !== changingColor.mapId) {
-                                                        return map;
+                                            <button onClick={async () => {
+                                                if (changingColor.submapId !== null) {
+                                                    const { error } = await supabase
+                                                        .from('submaps')
+                                                        .update({ color: newColor })
+                                                        .eq('id', changingColor.submapId);
+
+                                                    if (error) {
+                                                        console.error('Error changing submap color:', error);
+                                                        return;
                                                     }
 
-                                                    // if a submap is being changed.
-                                                    if (changingColor.submapId !== null) {
-                                                        return {
-                                                            ...map,
-                                                            submaps: map.submaps.map(submap =>
-                                                                submap.id === changingColor.submapId
-                                                                    ? { ...submap, color: newColor }
-                                                                    : submap
-                                                            )
-                                                        };
+                                                    setMaps(prevMaps =>
+                                                        prevMaps.map(map =>
+                                                            map.id === changingColor.mapId
+                                                                ? {
+                                                                    ...map,
+                                                                    submaps: map.submaps.map(submap =>
+                                                                        submap.id === changingColor.submapId
+                                                                            ? { ...submap, color: newColor }
+                                                                            : submap
+                                                                    )
+                                                                }
+                                                                : map
+                                                        )
+                                                    );
+                                                } else {
+                                                    const { error } = await supabase
+                                                        .from('maps')
+                                                        .update({ color: newColor })
+                                                        .eq('id', changingColor.mapId);
+
+                                                    if (error) {
+                                                        console.error('Error changing map color:', error);
+                                                        return;
                                                     }
 
-                                                    // else change the map color.
-                                                    return {
-                                                        ...map,
-                                                        color: newColor
-                                                    };
-                                                }));
+                                                    setMaps(prevMaps =>
+                                                        prevMaps.map(map =>
+                                                            map.id === changingColor.mapId
+                                                                ? { ...map, color: newColor }
+                                                                : map
+                                                        )
+                                                    );
+                                                }
 
                                                 setChangingColor(null);
                                             }}>
@@ -510,17 +561,31 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                             <button onClick={() => setRenamingMap(null)}>
                                                 Cancel
                                             </button>
-                                            <button
-                                                onClick={() => {
-                                                    if (newMapName.trim() === '') return;
+                                            <button onClick={async () => {
+                                                if (newMapName.trim() === '') return;
 
-                                                    setMaps(
-                                                        maps.map(map => map.id === renamingMap ? {...map, name: newMapName.trim() }
-                                                        : map)
+                                                const updatedName = newMapName.trim();
+
+                                                const { error } = await supabase
+                                                    .from('maps')
+                                                    .update({ name: updatedName })
+                                                    .eq('id', renamingMap);
+
+                                                if (error) {
+                                                    console.error('Error renaming map:', error);
+                                                    return;
+                                                }
+
+                                                setMaps(prevMaps =>
+                                                    prevMaps.map(map =>
+                                                        map.id === renamingMap
+                                                            ? { ...map, name: updatedName }
+                                                            : map
                                                     )
-                                                    setRenamingMap(null);
-                                                }}
-                                            >
+                                                );
+
+                                                setRenamingMap(null);
+                                            }}>
                                                 Save
                                             </button>
                                         </div>
@@ -540,9 +605,21 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                                 Cancel
                                             </button>
 
-                                            <button onClick={() => {
-                                                setMaps(maps.filter(map => map.id !== deletingMap)
-                                                )
+                                            <button onClick={async () => {
+                                                const { error } = await supabase
+                                                    .from('maps')
+                                                    .delete()
+                                                    .eq('id', deletingMap);
+
+                                                if (error) {
+                                                    console.error('Error deleting map:', error);
+                                                    return;
+                                                }
+
+                                                setMaps(prevMaps =>
+                                                    prevMaps.filter(map => map.id !== deletingMap)
+                                                );
+
                                                 setDeletingMap(null);
                                             }}>
                                                 Delete
@@ -573,21 +650,65 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                                     Cancel
                                             </button>
                                             <button
-                                                onClick={() => {
+                                                onClick={async () => {
                                                     if (newSubmapName.trim() === '') return;
-                                                    setMaps(maps.map(map =>
-                                                        map.id === addingSubmap ? {
-                                                            ...map, visible: false,
-                                                            submaps: [...map.submaps, {
-                                                                id: Date.now(),
-                                                                name: newSubmapName.trim(),
-                                                                visible: false,
-                                                                color: '#3388ff'
-                                                            }]
-                                                        }
-                                                        : map
-                                                    ))
+
+                                                    const updatedName = newSubmapName.trim();
+
+                                                    const { data: lastSubmap, error: orderError } = await supabase
+                                                        .from('submaps')
+                                                        .select('sort_order')
+                                                        .eq('map_id', addingSubmap)
+                                                        .order('sort_order', { ascending: false })
+                                                        .limit(1)
+                                                        .maybeSingle();
+
+                                                    if (orderError) {
+                                                        console.error('Error finding submap order:', orderError);
+                                                        return;
+                                                    }
+
+                                                    const newSortOrder = lastSubmap
+                                                        ? lastSubmap.sort_order + 1
+                                                        : 0;
+
+                                                    const { data: newSubmap, error } = await supabase
+                                                        .from('submaps')
+                                                        .insert({
+                                                            map_id: addingSubmap,
+                                                            name: updatedName,
+                                                            color: '#3388ff',
+                                                            sort_order: newSortOrder
+                                                        })
+                                                        .select()
+                                                        .single();
+
+                                                    if (error) {
+                                                        console.error('Error creating submap:', error);
+                                                        return;
+                                                    }
+
+                                                    setMaps(prevMaps =>
+                                                        prevMaps.map(map =>
+                                                            map.id === addingSubmap
+                                                                ? {
+                                                                    ...map,
+                                                                    submaps: [
+                                                                        ...map.submaps,
+                                                                        {
+                                                                            id: newSubmap.id,
+                                                                            name: newSubmap.name,
+                                                                            visible: false,
+                                                                            color: newSubmap.color
+                                                                        }
+                                                                    ]
+                                                                }
+                                                                : map
+                                                        )
+                                                    );
+
                                                     setAddingSubmap(null);
+                                                    setNewSubmapName('');
                                                 }}
                                             >
                                                 Create
@@ -627,22 +748,59 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                 <button onClick={() => setAddingMap(false)}
                                 > Cancel</button>
                                 
-                                <button onClick={() => {
+                                <button onClick={async () => {
                                     if (newMapName.trim() === '') return;
 
-                                    const newMap = {
-                                        id: Date.now(),
-                                        name: newMapName.trim(),
-                                        visible: false,
-                                        isDefault: false,
-                                        color: '#3388ff',
-                                        submaps: []
-                                    };
+                                    const updatedName = newMapName.trim();
 
-                                    setMaps([...maps, newMap]);
+                                    const { data: lastMap, error: orderError } = await supabase
+                                        .from('maps')
+                                        .select('sort_order')
+                                        .order('sort_order', { ascending: false })
+                                        .limit(1)
+                                        .maybeSingle();
+
+                                    if (orderError) {
+                                        console.error('Error finding map order:', orderError);
+                                        return;
+                                    }
+
+                                    const newSortOrder = lastMap
+                                        ? lastMap.sort_order + 1
+                                        : 0;
+
+                                    const { data: newMap, error } = await supabase
+                                        .from('maps')
+                                        .insert({
+                                            name: updatedName,
+                                            user_id: (await supabase.auth.getUser()).data.user.id,
+                                            color: '#3388ff',
+                                            is_default: false,
+                                            sort_order: newSortOrder
+                                        })
+                                        .select()
+                                        .single();
+
+                                    if (error) {
+                                        console.error('Error creating map:', error);
+                                        return;
+                                    }
+
+                                    setMaps(prevMaps => [
+                                        ...prevMaps,
+                                        {
+                                            id: newMap.id,
+                                            name: newMap.name,
+                                            visible: false,
+                                            isDefault: newMap.is_default,
+                                            color: newMap.color,
+                                            submaps: []
+                                        }
+                                    ]);
+
                                     setAddingMap(false);
-                                }}
-                                >
+                                    setNewMapName('');
+                                }}>
                                     Create
                                 </button>
                             </div>

@@ -4,6 +4,7 @@ import './Map.css';
 import Navbar from '../components/Navbar';
 import { useState, useRef, useEffect } from 'react';
 import MapSidebar from '../components/MapSidebar';
+import { supabase } from '../supabaseClient';
 
 
 function TravelMap() {
@@ -25,6 +26,227 @@ function TravelMap() {
     const [editingPin, setEditingPin] = useState(null);
     const [pinNotes, setPinNotes] = useState('');
     const [deletingPin, setDeletingPin] = useState(null);
+    const [checkingUser, setCheckingUser] = useState(true);
+
+    useEffect(() => {
+        const loadMaps = async () => {
+            const { data: userData } = await supabase.auth.getUser();
+
+            if (!userData.user) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const userId = userData.user.id;
+
+            const { data: mapData, error: mapError } = await supabase
+                .from('maps')
+                .select('*')
+                .eq('user_id', userId)
+                .order('sort_order', { ascending: true });
+
+            if (mapError) {
+                console.error('Error loading maps:', mapError);
+                setLoadingMaps(false);
+                setCheckingUser(false);
+                return;
+            }
+
+            // If this user has no maps yet, create their default maps.
+            const hasAllPlaces = mapData.some(
+                map => map.name === 'All Places' && map.is_default === true
+            );
+
+            if (!hasAllPlaces) {
+                const { data: newMaps, error: insertError } = await supabase
+                    .from('maps')
+                    .insert([
+                        {
+                            user_id: userId,
+                            name: 'All Places',
+                            color: '#333',
+                            is_default: true,
+                            sort_order: 0
+                        },
+                        {
+                            user_id: userId,
+                            name: 'My places',
+                            color: '#ff0000',
+                            is_default: false,
+                            sort_order: 1
+                        },
+                        {
+                            user_id: userId,
+                            name: 'Family',
+                            color: '#007ba0',
+                            is_default: false,
+                            sort_order: 2
+                        }
+                    ])
+                    .select();
+
+                if (insertError) {
+                    console.error('Error creating default maps:', insertError);
+                    setLoadingMaps(false);
+                    setCheckingUser(false);
+                    return;
+                }
+
+                const familyMap = newMaps.find(
+                    map => map.name === 'Family'
+                );
+
+                if (familyMap) {
+                    const { data: newSubmaps, error: submapError } = await supabase
+                        .from('submaps')
+                        .insert([
+                            {
+                                map_id: familyMap.id,
+                                name: 'Mom',
+                                color: '#eb877b',
+                                sort_order: 0
+                            },
+                            {
+                                map_id: familyMap.id,
+                                name: 'Dad',
+                                color: '#858626',
+                                sort_order: 1
+                            },
+                            {
+                                map_id: familyMap.id,
+                                name: 'Sister',
+                                color: '#2ecc71',
+                                sort_order: 2
+                            }
+                        ])
+                        .select();
+
+                    if (submapError) {
+                        console.error('Error creating default submaps:', submapError);
+                    }
+
+                    setMaps(
+                        newMaps.map(map => ({
+                            id: map.id,
+                            name: map.name,
+                            visible: false,
+                            isDefault: map.is_default,
+                            color: map.color,
+                            submaps: map.id === familyMap.id
+                                ? newSubmaps.map(submap => ({
+                                    id: submap.id,
+                                    name: submap.name,
+                                    visible: false,
+                                    color: submap.color
+                                }))
+                                : []
+                        }))
+                    );
+                }
+            } else {
+                // Load existing maps and their submaps.
+                const { data: submapData, error: submapError } = await supabase
+                    .from('submaps')
+                    .select('*')
+                    .order('sort_order', { ascending: true });
+
+                if (submapError) {
+                    console.error('Error loading submaps:', submapError);
+                }
+
+                setMaps(
+                    mapData.map(map => ({
+                        id: map.id,
+                        name: map.name,
+                        visible: false,
+                        isDefault: map.is_default,
+                        color: map.color,
+                        submaps: (submapData || [])
+                            .filter(submap => submap.map_id === map.id)
+                            .map(submap => ({
+                                id: submap.id,
+                                name: submap.name,
+                                visible: false,
+                                color: submap.color
+                            }))
+                    }))
+                );
+            }
+
+            setLoadingMaps(false);
+            setCheckingUser(false);
+        };
+
+        loadMaps();
+    }, []);
+
+    const getMapSelectionId = (id) => `map:${id}`;
+    const getSubmapSelectionId = (id) => `submap:${id}`;
+
+    const loadPins = async () => {
+        const { data: userData, error: userError } =
+            await supabase.auth.getUser();
+
+        if (userError || !userData.user) {
+            console.error('Error getting user:', userError);
+            return;
+        }
+
+        const userId = userData.user.id;
+
+        // Get all pins belonging to this user
+        const { data: pinData, error: pinError } = await supabase
+            .from('pins')
+            .select('*')
+            .eq('user_id', userId);
+
+        if (pinError) {
+            console.error('Error loading pins:', JSON.stringify(pinError, null, 2));
+            return;
+        }
+
+        if (pinData.length === 0) {
+            setPins([]);
+            return;
+        }
+
+        // Get the map/submap connections for these pins
+        const { data: pinMapData, error: pinMapError } = await supabase
+            .from('pin_maps')
+            .select('*')
+            .in(
+                'pin_id',
+                pinData.map(pin => pin.id)
+            );
+
+        if (pinMapError) {
+            console.error('Error loading pin map connections:', pinMapError);
+            return;
+        }
+
+        const loadedPins = pinData.map(pin => ({
+            id: pin.id,
+            name: pin.name,
+            longitude: pin.longitude,
+            latitude: pin.latitude,
+            notes: pin.notes || '',
+            maps: pinMapData
+                .filter(connection => connection.pin_id === pin.id)
+                .map(connection => {
+                    if (connection.map_id !== null) {
+                        return getMapSelectionId(connection.map_id);
+                    }
+
+                    return getSubmapSelectionId(connection.submap_id);
+                })
+        }));
+
+        setPins(loadedPins);
+    };
+
+    useEffect(() => {
+        loadPins();
+    }, []);
 
     useEffect(() => {
         const map = mapRef.current?.getMap();
@@ -39,103 +261,89 @@ function TravelMap() {
     "visible" determines whether that map's locations should appear.
     "isDefault" identifies built-in maps such as "All Places" which cannot be renamed or deleted.
     */
-    const [maps, setMaps] = useState([
-        {
-            id: 1,
-            name: 'All Places',
-            visible: false,
-            isDefault: true,
-            color: '#333',
-            submaps: [],
-        },
-        {
-            id: 2,
-            name: 'My places',
-            visible: false,
-            isDefault: false,
-            color: '#7520b9',
-            submaps: [],
-        },
-        {
-            id: 3,
-            name: 'Places to visit',
-            visible: false,
-            isDefault: false,
-            color: '#3388ff',
-            submaps: [ 
-                { id: 4, name: 'Asia', visible: false, color: '#e74c3c' }, 
-                { id: 5, name: 'Europe', visible: false, color: '#858626' }, 
-                { id: 6, name: 'North America', visible: false, color: '#2ecc71' } 
-            ],
-        }
-    ]);
-
+    const [maps, setMaps] = useState([]);
+    const [loadingMaps, setLoadingMaps] = useState(true);
+    
     const togglePinMap = (id) => {
         setSelectedMaps(prev => {
             const selected = new Set(prev);
 
+            const clickedMap = maps.find(map => map.id === id);
+
+            if (!clickedMap) {
+                return [...selected];
+            }
+
             // All Places selects or deselects everything
-            if (id === 1) {
+            if (clickedMap.isDefault) {
                 const allIds = maps.flatMap(map => [
-                    map.id,
-                    ...map.submaps.map(submap => submap.id)
+                    getMapSelectionId(map.id),
+                    ...map.submaps.map(submap =>
+                        getSubmapSelectionId(submap.id)
+                    )
                 ]);
 
                 const everythingSelected = allIds.every(
-                    mapId => selected.has(mapId)
+                    selectionId => selected.has(selectionId)
                 );
 
                 return everythingSelected ? [] : allIds;
             }
 
-            const selectedMap = maps.find(map => map.id === id);
-
-            if (!selectedMap) {
-                return [...selected];
-            }
+            const mapSelectionId = getMapSelectionId(id);
 
             // If this map has submaps, select/deselect
             // the parent and all of its children
-            if (selectedMap.submaps.length > 0) {
+            if (clickedMap.submaps.length > 0) {
                 const ids = [
-                    selectedMap.id,
-                    ...selectedMap.submaps.map(submap => submap.id)
+                    mapSelectionId,
+                    ...clickedMap.submaps.map(submap =>
+                        getSubmapSelectionId(submap.id)
+                    )
                 ];
 
-                const parentSelected = selected.has(id);
+                const parentSelected = selected.has(mapSelectionId);
 
                 if (parentSelected) {
-                    ids.forEach(mapId => selected.delete(mapId));
+                    ids.forEach(selectionId => selected.delete(selectionId));
                 } else {
-                    ids.forEach(mapId => selected.add(mapId));
+                    ids.forEach(selectionId => selected.add(selectionId));
                 }
             } else {
                 // Regular map
-                if (selected.has(id)) {
-                    selected.delete(id);
+                if (selected.has(mapSelectionId)) {
+                    selected.delete(mapSelectionId);
                 } else {
-                    selected.add(id);
+                    selected.add(mapSelectionId);
                 }
             }
 
             // Check whether every map and submap is selected
             const allIds = maps
-                .filter(map => map.id !== 1)
+                .filter(map => !map.isDefault)
                 .flatMap(map => [
-                    map.id,
-                    ...map.submaps.map(submap => submap.id)
+                    getMapSelectionId(map.id),
+                    ...map.submaps.map(submap =>
+                        getSubmapSelectionId(submap.id)
+                    )
                 ]);
 
             const everythingSelected = allIds.every(
-                mapId => selected.has(mapId)
+                selectionId => selected.has(selectionId)
             );
 
             // All Places should be checked whenever
             // everything else is checked
-            if (everythingSelected) {
-                selected.add(1);
-            } else {
-                selected.delete(1);
+            const allPlacesId = maps.find(map => map.isDefault)?.id;
+
+            if (allPlacesId !== undefined) {
+                const allPlacesSelectionId = getMapSelectionId(allPlacesId);
+
+                if (everythingSelected) {
+                    selected.add(allPlacesSelectionId);
+                } else {
+                    selected.delete(allPlacesSelectionId);
+                }
             }
 
             return [...selected];
@@ -154,11 +362,13 @@ function TravelMap() {
         setSelectedMaps(prev => {
             const selected = new Set(prev);
 
+            const submapSelectionId = getSubmapSelectionId(submapId);
+
             // Toggle the clicked submap
-            if (selected.has(submapId)) {
-                selected.delete(submapId);
+            if (selected.has(submapSelectionId)) {
+                selected.delete(submapSelectionId);
             } else {
-                selected.add(submapId);
+                selected.add(submapSelectionId);
             }
 
             const parentMap = maps.find(map => map.id === mapId);
@@ -169,33 +379,43 @@ function TravelMap() {
 
             // Check whether all of this parent's submaps are selected
             const allSubmapsSelected = parentMap.submaps.every(
-                submap => selected.has(submap.id)
+                submap => selected.has(getSubmapSelectionId(submap.id))
             );
+
+            const parentSelectionId = getMapSelectionId(mapId);
 
             // Select or deselect the parent based on its children
             if (allSubmapsSelected) {
-                selected.add(mapId);
+                selected.add(parentSelectionId);
             } else {
-                selected.delete(mapId);
+                selected.delete(parentSelectionId);
             }
 
             // Check whether everything is selected
             const allIds = maps
-                .filter(map => map.id !== 1)
+                .filter(map => !map.isDefault)
                 .flatMap(map => [
-                    map.id,
-                    ...map.submaps.map(submap => submap.id)
+                    getMapSelectionId(map.id),
+                    ...map.submaps.map(submap =>
+                        getSubmapSelectionId(submap.id)
+                    )
                 ]);
 
             const everythingSelected = allIds.every(
-                id => selected.has(id)
+                selectionId => selected.has(selectionId)
             );
 
             // If everything is selected, also select All Places
-            if (everythingSelected) {
-                selected.add(1);
-            } else {
-                selected.delete(1);
+            const allPlacesId = maps.find(map => map.isDefault)?.id;
+
+            if (allPlacesId !== undefined) {
+                const allPlacesSelectionId = getMapSelectionId(allPlacesId);
+
+                if (everythingSelected) {
+                    selected.add(allPlacesSelectionId);
+                } else {
+                    selected.delete(allPlacesSelectionId);
+                }
             }
 
             return [...selected];
@@ -203,24 +423,28 @@ function TravelMap() {
     };
 
     const getPinColor = (pin) => {
-        // Ignore All Places when choosing the pin color
-        const selectedIds = pin.maps.filter(id => id !== 1);
+        for (const selectionId of pin.maps) {
+            if (selectionId.startsWith('submap:')) {
+                const submapId = Number(selectionId.replace('submap:', ''));
 
-        for (const id of selectedIds) {
-            // Check if the ID belongs to a submap
-            for (const map of maps) {
-                const submap = map.submaps.find(submap => submap.id === id);
+                for (const map of maps) {
+                    const submap = map.submaps.find(
+                        submap => submap.id === submapId
+                    );
 
-                if (submap) {
-                    return submap.color;
+                    if (submap) {
+                        return submap.color;
+                    }
                 }
             }
 
-            // Check if the ID belongs to a parent map
-            const map = maps.find(map => map.id === id);
+            if (selectionId.startsWith('map:')) {
+                const mapId = Number(selectionId.replace('map:', ''));
+                const map = maps.find(map => map.id === mapId);
 
-            if (map) {
-                return map.color;
+                if (map && !map.isDefault) {
+                    return map.color;
+                }
             }
         }
 
@@ -228,28 +452,41 @@ function TravelMap() {
     };
 
     const isPinVisible = (pin) => {
-        // All Places is selected, so show every pin
-        if (maps.find(map => map.id === 1)?.visible) {
+        if (maps.find(map => map.isDefault)?.visible) {
             return true;
         }
 
-        // Check whether any map or submap assigned to this pin is visible
-        return pin.maps.some(id => {
-            // Check parent maps
-            const map = maps.find(map => map.id === id);
+        return pin.maps.some(selectionId => {
+            if (selectionId.startsWith('map:')) {
+                const mapId = Number(selectionId.replace('map:', ''));
+                const map = maps.find(map => map.id === mapId);
 
-            if (map) {
-                return map.visible;
+                return map ? map.visible : false;
             }
 
-            // Check submaps
-            return maps.some(map =>
-                map.submaps.some(submap =>
-                    submap.id === id && submap.visible
-                )
-            );
+            if (selectionId.startsWith('submap:')) {
+                const submapId = Number(selectionId.replace('submap:', ''));
+
+                return maps.some(map =>
+                    map.submaps.some(
+                        submap =>
+                            submap.id === submapId && submap.visible
+                    )
+                );
+            }
+
+            return false;
         });
     };
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/login';
+    };
+
+    if (checkingUser || loadingMaps) {
+        return <p>Loading...</p>;
+    }
 
     return (
         <>
@@ -416,13 +653,15 @@ function TravelMap() {
                                         <span>Maps:</span>
 
                                         {maps
-                                            .filter(map => map.id !== 1)
+                                            .filter(map => !map.isDefault)
                                             .map(map => {
                                                 const selectedSubmaps = map.submaps.filter(submap =>
-                                                    selectedPin.maps.includes(submap.id)
+                                                    selectedPin.maps.includes(getSubmapSelectionId(submap.id))
                                                 );
 
-                                                const mapSelected = selectedPin.maps.includes(map.id);
+                                                const mapSelected = selectedPin.maps.includes(
+                                                    getMapSelectionId(map.id)
+                                                );
 
                                                 if (!mapSelected && selectedSubmaps.length === 0) {
                                                     return null;
@@ -534,7 +773,7 @@ function TravelMap() {
 
                                                 <input
                                                     type="checkbox"
-                                                    checked={selectedMaps.includes(map.id)}
+                                                    checked={selectedMaps.includes(getMapSelectionId(map.id))}
                                                     onChange={() => togglePinMap(map.id)}
                                                 />
 
@@ -559,7 +798,7 @@ function TravelMap() {
 
                                                             <input
                                                                 type="checkbox"
-                                                                checked={selectedMaps.includes(submap.id)}
+                                                                checked={selectedMaps.includes(getSubmapSelectionId(submap.id))}
                                                                 onChange={() => togglePinSubmap(
                                                                     map.id,
                                                                     submap.id
@@ -595,7 +834,7 @@ function TravelMap() {
                                     </button>
 
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (pinName.trim() === '') {
                                                 alert('Please enter a name for the pin.');
                                                 return;
@@ -607,6 +846,86 @@ function TravelMap() {
                                             }
 
                                             if (editingPin) {
+                                                const { error: pinError } = await supabase
+                                                    .from('pins')
+                                                    .update({
+                                                        name: pinName.trim(),
+                                                        notes: pinNotes.trim()
+                                                    })
+                                                    .eq('id', editingPin.id);
+
+                                                if (pinError) {
+                                                    console.error(
+                                                        'Error updating pin:',
+                                                        JSON.stringify(pinError, null, 2)
+                                                    );
+                                                    alert('Could not update the pin.');
+                                                    return;
+                                                }
+
+                                                const { error: deleteMapError } = await supabase
+                                                    .from('pin_maps')
+                                                    .delete()
+                                                    .eq('pin_id', editingPin.id);
+
+                                                if (deleteMapError) {
+                                                    console.error(
+                                                        'Error removing old pin maps:',
+                                                        JSON.stringify(deleteMapError, null, 2)
+                                                    );
+                                                    alert('Could not update the pin maps.');
+                                                    return;
+                                                }
+
+                                                const pinMapRows = selectedMaps
+                                                    .filter(selectionId => {
+                                                        if (selectionId.startsWith('map:')) {
+                                                            const mapId = Number(
+                                                                selectionId.replace('map:', '')
+                                                            );
+
+                                                            const map = maps.find(map => map.id === mapId);
+
+                                                            return map && !map.isDefault;
+                                                        }
+
+                                                        return true;
+                                                    })
+                                                    .map(selectionId => {
+                                                        if (selectionId.startsWith('map:')) {
+                                                            return {
+                                                                pin_id: editingPin.id,
+                                                                map_id: Number(
+                                                                    selectionId.replace('map:', '')
+                                                                ),
+                                                                submap_id: null
+                                                            };
+                                                        }
+
+                                                        return {
+                                                            pin_id: editingPin.id,
+                                                            map_id: null,
+                                                            submap_id: Number(
+                                                                selectionId.replace('submap:', '')
+                                                            )
+                                                        };
+                                                    });
+
+                                                if (pinMapRows.length > 0) {
+                                                    const { error: pinMapError } = await supabase
+                                                        .from('pin_maps')
+                                                        .insert(pinMapRows);
+
+                                                    if (pinMapError) {
+                                                        console.error(
+                                                            'Error updating pin maps:',
+                                                            JSON.stringify(pinMapError, null, 2)
+                                                        );
+                                                        alert('Could not save the pin maps.');
+                                                        return;
+                                                    }
+                                                }
+
                                                 setPins(prevPins =>
                                                     prevPins.map(pin =>
                                                         pin.id === editingPin.id
@@ -620,12 +939,91 @@ function TravelMap() {
                                                     )
                                                 );
                                             } else {
+                                                const { data: userData, error: userError } =
+                                                    await supabase.auth.getUser();
+
+                                                if (userError || !userData.user) {
+                                                    alert('You must be logged in to create a pin.');
+                                                    return;
+                                                }
+
+                                                // Create the pin itself
+                                                const { data: newPinData, error: pinError } = await supabase
+                                                    .from('pins')
+                                                    .insert({
+                                                        user_id: userData.user.id,
+                                                        name: pinName.trim(),
+                                                        longitude: newPin.longitude,
+                                                        latitude: newPin.latitude,
+                                                        notes: pinNotes.trim()
+                                                    })
+                                                    .select()
+                                                    .single();
+
+                                                if (pinError) {
+                                                    console.error('Error creating pin:', pinError);
+                                                    alert('Could not save the pin.');
+                                                    return;
+                                                }
+
+                                                // Convert the selected map/submap IDs into database rows
+                                                const pinMapRows = selectedMaps
+                                                    .filter(selectionId => {
+                                                        // All Places is only a selection shortcut.
+                                                        // We don't save it as a pin connection.
+                                                        if (selectionId.startsWith('map:')) {
+                                                            const mapId = Number(selectionId.replace('map:', ''));
+                                                            const map = maps.find(map => map.id === mapId);
+
+                                                            return map && !map.isDefault;
+                                                        }
+
+                                                        return true;
+                                                    })
+                                                    .map(selectionId => {
+                                                        if (selectionId.startsWith('map:')) {
+                                                            return {
+                                                                pin_id: newPinData.id,
+                                                                map_id: Number(selectionId.replace('map:', '')),
+                                                                submap_id: null
+                                                            };
+                                                        }
+
+                                                        return {
+                                                            pin_id: newPinData.id,
+                                                            map_id: null,
+                                                            submap_id: Number(
+                                                                selectionId.replace('submap:', '')
+                                                            )
+                                                        };
+                                                    });
+
+                                                const { error: pinMapError } = await supabase
+                                                    .from('pin_maps')
+                                                    .insert(pinMapRows);
+
+                                                if (pinMapError) {
+                                                    console.error(
+                                                        'Error creating pin map connections:',
+                                                        pinMapError
+                                                    );
+
+                                                    // Remove the pin if its connections could not be saved.
+                                                    await supabase
+                                                        .from('pins')
+                                                        .delete()
+                                                        .eq('id', newPinData.id);
+
+                                                    alert('Could not save the pin maps.');
+                                                    return;
+                                                }
+
                                                 const pin = {
-                                                    id: Date.now(),
-                                                    name: pinName.trim(),
-                                                    longitude: newPin.longitude,
-                                                    latitude: newPin.latitude,
-                                                    notes: pinNotes.trim(),
+                                                    id: newPinData.id,
+                                                    name: newPinData.name,
+                                                    longitude: newPinData.longitude,
+                                                    latitude: newPinData.latitude,
+                                                    notes: newPinData.notes || '',
                                                     maps: selectedMaps
                                                 };
 
@@ -666,12 +1064,27 @@ function TravelMap() {
 
                                     <button
                                         className="pin-delete-button"
-                                        onClick={() => {
-                                            setPins(prevPins =>
-                                                prevPins.filter(pin => pin.id !== deletingPin.id)
-                                            );
+                                        onClick={async () => {
+                                            const { error: pinError } = await supabase
+                                            .from('pins')
+                                            .delete()
+                                            .eq('id', deletingPin.id);
 
-                                            setDeletingPin(null);
+                                        if (pinError) {
+                                            console.error(
+                                                'Error deleting pin:',
+                                                JSON.stringify(pinError, null, 2)
+                                            );
+                                            alert('Could not delete the pin.');
+                                            return;
+                                        }
+
+                                        setPins(prevPins =>
+                                            prevPins.filter(pin => pin.id !== deletingPin.id)
+                                        );
+
+                                        setDeletingPin(null);
+
                                         }}
                                     >
                                         Delete Pin

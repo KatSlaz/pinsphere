@@ -14,3 +14,47 @@
     text-decoration: none;
     color: rgb(133, 78, 221);
 }
+
+.navbar-account {
+    position: relative;
+}
+
+.navbar-account-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.navbar-account-button span {
+    margin-left: 6px;
+    font-size: 10px;
+}
+
+.account-dropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 8px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    min-width: 120px;
+    z-index: 20;
+}
+
+.account-dropdown button {
+    width: 100%;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-size: 14px;
+    color: #333;
+}
+
+.account-dropdown button:hover {
+    background: #f5f5f5;
+}
