@@ -39,10 +39,21 @@ function TravelMap() {
 
             const userId = userData.user.id;
 
+            const { data: collaboratorData, error: collaboratorError } = await supabase
+                .from('map_collaborators')
+                .select('map_id, role')
+                .eq('user_id', userId);
+
+            if (collaboratorError) {
+                console.error(
+                    'Error loading collaborator roles:',
+                    JSON.stringify(collaboratorError, null, 2)
+                );
+            }
+
             const { data: mapData, error: mapError } = await supabase
                 .from('maps')
                 .select('*')
-                .eq('user_id', userId)
                 .order('sort_order', { ascending: true });
 
             if (mapError) {
@@ -54,36 +65,44 @@ function TravelMap() {
 
             // If this user has no maps yet, create their default maps.
             const hasAllPlaces = mapData.some(
-                map => map.name === 'All Places' && map.is_default === true
+                map =>
+                    map.user_id === userId &&
+                    map.name === 'All Places' &&
+                    map.is_default === true
             );
 
             if (!hasAllPlaces) {
-                const { data: newMaps, error: insertError } = await supabase
+                const { error: insertError } = await supabase
                     .from('maps')
-                    .insert([
+                    .upsert(
+                        [
+                            {
+                                user_id: userId,
+                                name: 'All Places',
+                                color: '#333',
+                                is_default: true,
+                                sort_order: 0
+                            },
+                            {
+                                user_id: userId,
+                                name: 'My places',
+                                color: '#ff0000',
+                                is_default: false,
+                                sort_order: 1
+                            },
+                            {
+                                user_id: userId,
+                                name: 'Family',
+                                color: '#007ba0',
+                                is_default: false,
+                                sort_order: 2
+                            }
+                        ],
                         {
-                            user_id: userId,
-                            name: 'All Places',
-                            color: '#333',
-                            is_default: true,
-                            sort_order: 0
-                        },
-                        {
-                            user_id: userId,
-                            name: 'My places',
-                            color: '#ff0000',
-                            is_default: false,
-                            sort_order: 1
-                        },
-                        {
-                            user_id: userId,
-                            name: 'Family',
-                            color: '#007ba0',
-                            is_default: false,
-                            sort_order: 2
+                            onConflict: 'user_id,name',
+                            ignoreDuplicates: true
                         }
-                    ])
-                    .select();
+                    );
 
                 if (insertError) {
                     console.error('Error creating default maps:', insertError);
@@ -92,75 +111,92 @@ function TravelMap() {
                     return;
                 }
 
-                const familyMap = newMaps.find(
-                    map => map.name === 'Family'
-                );
+                const { data: familyMap, error: familyMapError } = await supabase
+                    .from('maps')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .eq('name', 'Family')
+                    .single();
+
+                if (familyMapError) {
+                    console.error('Error loading Family map:', familyMapError);
+                }
 
                 if (familyMap) {
-                    const { data: newSubmaps, error: submapError } = await supabase
+                    const { error: submapError } = await supabase
                         .from('submaps')
-                        .insert([
+                        .upsert(
+                            [
+                                {
+                                    map_id: familyMap.id,
+                                    name: 'Mom',
+                                    color: '#eb877b',
+                                    sort_order: 0
+                                },
+                                {
+                                    map_id: familyMap.id,
+                                    name: 'Dad',
+                                    color: '#858626',
+                                    sort_order: 1
+                                },
+                                {
+                                    map_id: familyMap.id,
+                                    name: 'Sister',
+                                    color: '#2ecc71',
+                                    sort_order: 2
+                                }
+                            ],
                             {
-                                map_id: familyMap.id,
-                                name: 'Mom',
-                                color: '#eb877b',
-                                sort_order: 0
-                            },
-                            {
-                                map_id: familyMap.id,
-                                name: 'Dad',
-                                color: '#858626',
-                                sort_order: 1
-                            },
-                            {
-                                map_id: familyMap.id,
-                                name: 'Sister',
-                                color: '#2ecc71',
-                                sort_order: 2
+                                onConflict: 'map_id,name',
+                                ignoreDuplicates: true
                             }
-                        ])
-                        .select();
+                        );
 
                     if (submapError) {
                         console.error('Error creating default submaps:', submapError);
                     }
+                }
+            }
 
-                    setMaps(
-                        newMaps.map(map => ({
-                            id: map.id,
-                            name: map.name,
-                            visible: false,
-                            isDefault: map.is_default,
-                            color: map.color,
-                            submaps: map.id === familyMap.id
-                                ? newSubmaps.map(submap => ({
-                                    id: submap.id,
-                                    name: submap.name,
-                                    visible: false,
-                                    color: submap.color
-                                }))
-                                : []
-                        }))
+            const { data: finalMapData, error: finalMapError } = await supabase
+                .from('maps')
+                .select('*')
+                .order('sort_order', { ascending: true });
+
+            if (finalMapError) {
+                console.error('Error loading maps:', finalMapError);
+                setLoadingMaps(false);
+                setCheckingUser(false);
+                return;
+            }
+
+            const { data: submapData, error: submapError } = await supabase
+                .from('submaps')
+                .select('*')
+                .order('sort_order', { ascending: true });
+
+            if (submapError) {
+                console.error('Error loading submaps:', submapError);
+            }
+
+            console.log('Current user ID:', userId);
+            console.log('Maps from Supabase:', finalMapData);
+            console.log('Collaborators:', collaboratorData);
+            setMaps(
+                finalMapData.map(map => {
+                    const collaborator = (collaboratorData || []).find(
+                        item => item.map_id === map.id
                     );
-                }
-            } else {
-                // Load existing maps and their submaps.
-                const { data: submapData, error: submapError } = await supabase
-                    .from('submaps')
-                    .select('*')
-                    .order('sort_order', { ascending: true });
 
-                if (submapError) {
-                    console.error('Error loading submaps:', submapError);
-                }
-
-                setMaps(
-                    mapData.map(map => ({
+                    return {
                         id: map.id,
                         name: map.name,
                         visible: false,
                         isDefault: map.is_default,
                         color: map.color,
+                        role: map.user_id === userId
+                            ? 'owner'
+                            : collaborator?.role || 'viewer',
                         submaps: (submapData || [])
                             .filter(submap => submap.map_id === map.id)
                             .map(submap => ({
@@ -168,17 +204,26 @@ function TravelMap() {
                                 name: submap.name,
                                 visible: false,
                                 color: submap.color
-                            }))
-                    }))
-                );
-            }
+                        }))
+            }}))
+            ;
 
             setLoadingMaps(false);
             setCheckingUser(false);
         };
 
         loadMaps();
-    }, []);
+
+        const handleMapsUpdated = () => {
+            loadMaps();
+        };
+
+        window.addEventListener('mapsUpdated', handleMapsUpdated);
+
+        return () => {
+            window.removeEventListener('mapsUpdated', handleMapsUpdated);
+        };
+        }, []);
 
     const getMapSelectionId = (id) => `map:${id}`;
     const getSubmapSelectionId = (id) => `submap:${id}`;

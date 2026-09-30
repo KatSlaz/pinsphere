@@ -24,6 +24,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
     const submapMenuRef = useRef(null);
     const [changingColor, setChangingColor] = useState(null);
     const [newColor, setNewColor] = useState('#3388ff');
+    const [sharingMap, setSharingMap] = useState(null);
+    const [collaboratorEmail, setCollaboratorEmail] = useState('');
     
     // Closes the customization menu if the user clicks outside of it.
     useEffect(() => {
@@ -163,7 +165,11 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                 <div className="map-list">
                     
                     {/* Creates a row for each map in the maps array */}
-                    {maps.map((map) => (
+                    {maps.map(map => {
+                        const isOwner = map.role === 'owner';
+                        const canEdit = map.role === 'owner' || map.role === 'editor';
+
+                        return (
                         
                         <div key={map.id} className="map-item-container">
                             
@@ -197,7 +203,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
 
                                     <span className="map-name" style={{ color: map.color }}>{map.name}</span>
 
-                                {!map.isDefault && (
+                                {!map.isDefault && canEdit && (
                                     <button 
                                     className="map-menu-button"
                                     onClick={(event) => {
@@ -227,17 +233,19 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                             <span className="submap-name" style={{ color: submap.color }}>
                                                 {submap.name}
                                             </span>
-                                            <button
-                                                className="submap-menu-button"
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    setCustomizingSubmap(
-                                                        customizingSubmap === submap.id ? null : submap.id
-                                                    )
-                                                }}
-                                            >
-                                                ⋮
-                                            </button>
+                                            {canEdit && (
+                                                <button
+                                                    className="submap-menu-button"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        setCustomizingSubmap(
+                                                            customizingSubmap === submap.id ? null : submap.id
+                                                        )
+                                                    }}
+                                                >
+                                                    ⋮
+                                                </button>
+                                            )}
 
                                             {customizingSubmap === submap.id && (
                                                 <div 
@@ -421,52 +429,65 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
 
                             {customizingMap === map.id && (
                                 <div ref={menuRef} className="customization-menu">
-                                    <button onClick={(event) => {
-                                        event.stopPropagation();
-                                        setNewMapName(map.name);
-                                        setRenamingMap(map.id);
-                                        setCustomizingMap(null);
-                                    }}>
-                                        rename
-                                    </button>
-                                    <button onClick={(event) => {
-                                        event.stopPropagation();
-                                        setNewColor(map.color);
-                                        setChangingColor({
-                                            mapId: map.id,
-                                            submapId: null
-                                        });
-                                        setCustomizingMap(null);
-                                    }}>
-                                        change color
-                                    </button>
-                                    <button onClick={(event) => {
-                                        event.stopPropagation();
-                                        // Implementation for invite
-                                    }}>
-                                        invite collaborator
-                                    </button>
+                                    {isOwner && (
+                                        <>
+                                            <button onClick={(event) => {
+                                                event.stopPropagation();
+                                                setNewMapName(map.name);
+                                                setRenamingMap(map.id);
+                                                setCustomizingMap(null);
+                                            }}>
+                                                rename
+                                            </button>
+                                            <button onClick={(event) => {
+                                                event.stopPropagation();
+                                                setNewColor(map.color);
+                                                setChangingColor({
+                                                    mapId: map.id,
+                                                    submapId: null
+                                                });
+                                                setCustomizingMap(null);
+                                            }}>
+                                                change color
+                                            </button>
+                                            <button onClick={(event) => {
+                                                event.stopPropagation();
+                                                setSharingMap(map);
+                                                setCollaboratorEmail('');
+                                                setCustomizingMap(null);
+                                            }}>
+                                                invite collaborator
+                                            </button>
+                                       
                                     <button onClick={(event) => {
                                         event.stopPropagation();
                                         // Implementation for view collaborators
                                     }}>
                                         view collaborators
                                     </button>
-                                    <button onClick={(event) => {
-                                        event.stopPropagation();
-                                        setNewSubmapName('');
-                                        setAddingSubmap(map.id);
-                                        setCustomizingMap(null);
-                                    }}>
-                                        add submap
-                                    </button>
-                                    <button onClick={(event) => {
-                                        event.stopPropagation();
-                                        setDeletingMap(map.id);
-                                        setCustomizingMap(null);
-                                    }}>
-                                        delete 
-                                    </button>
+                                    </>
+                                    )}
+                                    {canEdit && (
+                                        <button onClick={(event) => {
+                                            event.stopPropagation();
+                                            setNewSubmapName('');
+                                            setAddingSubmap(map.id);
+                                            setCustomizingMap(null);
+                                        }}>
+                                            add submap
+                                        </button>
+                                    )}
+                                    {isOwner && (
+                                    <>
+                                        <button onClick={(event) => {
+                                            event.stopPropagation();
+                                            setDeletingMap(map.id);
+                                            setCustomizingMap(null);
+                                        }}>
+                                            delete 
+                                        </button>
+                                    </>
+                                )}
                                 </div>
                             )}
 
@@ -629,6 +650,70 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                 </div>
                             )}
 
+                            {/*Shows the sharing map popup to add to the matching map id.*/}
+                            {sharingMap && sharingMap.id === map.id && (
+                                <div className="rename-overlay">
+                                    <div
+                                        className="rename-popup"
+                                        onClick={(event) => event.stopPropagation()}
+                                    >
+                                        <h3>Invite Collaborator</h3>
+
+                                        <input
+                                            type="email"
+                                            placeholder="Enter user's email"
+                                            value={collaboratorEmail}
+                                            onChange={(event) =>
+                                                setCollaboratorEmail(event.target.value)
+                                            }
+                                        />
+
+                                        <div className="rename-buttons">
+                                            <button
+                                                onClick={() => {
+                                                    setSharingMap(null);
+                                                    setCollaboratorEmail('');
+                                                }}
+                                            >
+                                                Cancel
+                                            </button>
+
+                                            <button
+                                                onClick={async () => {
+                                                    if (collaboratorEmail.trim() === '') {
+                                                        return;
+                                                    }
+
+                                                    const { error } = await supabase.rpc(
+                                                        'invite_map_collaborator',
+                                                        {
+                                                            invite_map_id: sharingMap.id,
+                                                            invite_email: collaboratorEmail.trim()
+                                                        }
+                                                    );
+
+                                                    if (error) {
+                                                        console.error(
+                                                            'Error inviting collaborator:',
+                                                            JSON.stringify(error, null, 2)
+                                                        );
+                                                        alert(error.message);
+                                                        return;
+                                                    }
+
+                                                    alert('Invitation sent successfully.');
+
+                                                    setSharingMap(null);
+                                                    setCollaboratorEmail('');
+                                                }}
+                                            >
+                                                Invite
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/*Shows the adding submap popup to add to the matching map id.*/}
                             {addingSubmap === map.id && (
                                 <div className="rename-overlay">
@@ -718,7 +803,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        );    
+                    })}
                 </div>
                 <button className="add-map-button" 
                     onClick={(event) => {
@@ -794,6 +880,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                             visible: false,
                                             isDefault: newMap.is_default,
                                             color: newMap.color,
+                                            role: 'owner',
                                             submaps: []
                                         }
                                     ]);
