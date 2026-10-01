@@ -2,10 +2,12 @@ import Map, { Marker, Popup } from '@vis.gl/react-maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './Map.css';
 import Navbar from '../components/Navbar';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import MapSidebar from '../components/MapSidebar';
 import { supabase } from '../supabaseClient';
 import { MAP_STYLES } from '../mapStyles';
+import { applyPersonalOrder, pinColor } from '../mapOrdering';
+import { useMapOrdering } from '../useMapOrdering';
 
 const getMapSelectionId = (id) => `map:${id}`;
 const getSubmapSelectionId = (id) => `submap:${id}`;
@@ -43,7 +45,9 @@ function PinSphereMap({ mapStyle }) {
     const [leavingMapId, setLeavingMapId] = useState(null);
     const leavingMapRef = useRef(false);
     const [currentUserId, setCurrentUserId] = useState(null);
-    const [maps, setMaps] = useState([]);
+    const [rawMaps, setMaps] = useState([]);
+    const ordering = useMapOrdering(currentUserId, rawMaps);
+    const maps = useMemo(() => applyPersonalOrder(rawMaps, ordering.order), [rawMaps, ordering.order]);
     const [loadingMaps, setLoadingMaps] = useState(true);
     const pinLoadRef = useRef(0);
 
@@ -132,6 +136,7 @@ function PinSphereMap({ mapStyle }) {
             }
 
             const userId = userData.user.id;
+            setCurrentUserId(userId);
 
             const { data: collaboratorData, error: collaboratorError } = await supabase
                 .from('map_collaborators')
@@ -287,6 +292,7 @@ function PinSphereMap({ mapStyle }) {
                         visible: false,
                         isDefault: map.is_default === true && map.user_id === userId && map.name === 'All Places',
                         color: map.color,
+                        sortOrder: map.sort_order,
                         role: map.user_id === userId
                             ? 'owner'
                             : collaborator?.role || 'viewer',
@@ -296,7 +302,8 @@ function PinSphereMap({ mapStyle }) {
                                 id: submap.id,
                                 name: submap.name,
                                 visible: false,
-                                color: submap.color
+                                color: submap.color,
+                                sortOrder: submap.sort_order
                         }))
             }});
             setMaps(loadedMaps);
@@ -499,34 +506,7 @@ function PinSphereMap({ mapStyle }) {
         });
     };
 
-    const getPinColor = (pin) => {
-        for (const selectionId of pin.maps) {
-            if (selectionId.startsWith('submap:')) {
-                const submapId = Number(selectionId.replace('submap:', ''));
-
-                for (const map of maps) {
-                    const submap = map.submaps.find(
-                        submap => submap.id === submapId
-                    );
-
-                    if (submap) {
-                        return submap.color;
-                    }
-                }
-            }
-
-            if (selectionId.startsWith('map:')) {
-                const mapId = Number(selectionId.replace('map:', ''));
-                const map = maps.find(map => map.id === mapId);
-
-                if (map && !map.isDefault) {
-                    return map.color;
-                }
-            }
-        }
-
-        return '#3388ff';
-    };
+    const getPinColor = (pin) => pinColor(pin, maps);
 
     const isPinVisible = (pin) => {
         const allPlacesVisible = maps.find(map => map.isDefault)?.visible;
@@ -710,6 +690,9 @@ function PinSphereMap({ mapStyle }) {
                     setMaps={setMaps}
                     onLeaveMap={handleLeaveMap}
                     leavingMapId={leavingMapId}
+                    onReorder={ordering.reorder}
+                    orderStatus={ordering.status}
+                    onRetryOrder={ordering.retry}
                 />
 
                 <div className="map-wrapper">

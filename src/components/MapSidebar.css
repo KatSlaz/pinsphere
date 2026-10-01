@@ -11,6 +11,51 @@
     overflow: hidden;
 }
 
+.order-drag-handle {
+    flex: 0 0 16px;
+    width: 16px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: grab;
+    touch-action: none;
+    font-size: 16px;
+}
+
+.order-drag-handle:active {
+    cursor: grabbing;
+}
+
+.orderable-row {
+    position: relative;
+}
+
+.order-drop-target::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    background: var(--link);
+    pointer-events: none;
+}
+
+.order-drop-before::after {
+    top: 0;
+    bottom: auto;
+}
+
+.order-status {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--muted);
+}
+
+.order-status button {
+    margin-left: 6px;
+    border: none;
+}
+
 .map-sidebar.closed {
     width: 50px;
     background-color: transparent;
@@ -77,14 +122,28 @@
     margin-top: 20px;
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .map-item:hover {
     background-color: #f0f0f0;
 }
 
-.map-name {
-    flex: 1;
+.map-name,
+.submap-name {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-item > .dropdown-container,
+.map-item > .checkbox-container,
+.submap-item > input[type="checkbox"],
+.map-menu-button,
+.submap-menu-button {
+    flex-shrink: 0;
 }
 
 .map-menu-button {
@@ -183,10 +242,6 @@
 
 .submap-item:hover {
     background-color: #f0f0f0;
-}
-
-.submap-name {
-    flex: 1;
 }
 
 .submap-menu-button {

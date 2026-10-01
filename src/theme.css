@@ -226,6 +226,15 @@ button:disabled {
     background: var(--hover-bg);
 }
 
+/* Distinguish hovered controls from the hovered row underneath them. */
+:root .map-sidebar :is(.order-drag-handle, .dropdown-button, .map-menu-button, .submap-menu-button, .sidebar-toggle):hover:not(:disabled) {
+    background: var(--active-bg);
+}
+
+:root .map-sidebar :is(.order-drag-handle, .dropdown-button, .map-menu-button, .submap-menu-button, .sidebar-toggle):active:not(:disabled) {
+    background: color-mix(in srgb, var(--active-bg), var(--text) 10%);
+}
+
 :root .invitation-item,
 :root .pin-popup-buttons,
 :root .pin-search input {
