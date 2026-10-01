@@ -1,0 +1,259 @@
+/* Shared appearance tokens. Map and submap user colors stay unchanged. */
+:root {
+    --text: #333;
+    --text-h: #08060d;
+    --bg: #fff;
+    --surface: #fff;
+    --control-bg: #f0f0f0;
+    --hover-bg: #e5e5e5;
+    --active-bg: #d8d8d8;
+    --border: #ddd;
+    --muted: #555;
+    --link: #6d35b6;
+    --navbar-bg: #333;
+    --navbar-text: #fff;
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    --text: #e5e7eb;
+    --text-h: #f3f4f6;
+    --bg: #16171d;
+    --surface: #22242d;
+    --control-bg: #30333f;
+    --hover-bg: #3b3f4d;
+    --active-bg: #474c5c;
+    --border: #484c5b;
+    --muted: #b3b8c8;
+    --link: #c4a0ff;
+    --navbar-bg: #111218;
+    --code-bg: #1f2028;
+    --accent: #c084fc;
+    --accent-bg: rgba(192, 132, 252, 0.15);
+    --accent-border: rgba(192, 132, 252, 0.5);
+    --social-bg: rgba(47, 48, 58, 0.5);
+    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px;
+    color-scheme: dark;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* Names stay readable; existing checkboxes carry the selected map colors. */
+.map-name,
+.submap-name,
+.pin-map-name,
+.pin-submap-name,
+.pin-popup-map-name,
+.pin-popup-submap-name {
+    color: var(--text);
+}
+
+a {
+    color: var(--link);
+}
+
+button, input, textarea, select {
+    font: inherit;
+    color: var(--text);
+    background-color: var(--control-bg);
+    border-color: var(--border);
+}
+
+/* Flatten controls without changing their dimensions or floating containers. */
+:root button,
+:root input,
+:root textarea,
+:root select {
+    box-shadow: none;
+}
+
+:root button {
+    appearance: none;
+    /* Preserve existing border widths and borderless icon-button sizing. */
+    border-color: transparent;
+    --button-hover-bg: var(--hover-bg);
+    --button-active-bg: var(--active-bg);
+}
+
+:root button:hover:not(:disabled) {
+    background-color: var(--button-hover-bg);
+}
+
+:root button:active:not(:disabled) {
+    background-color: var(--button-active-bg);
+}
+
+:root .get-started-button {
+    --button-hover-bg: #45a049;
+    --button-active-bg: #3d8e41;
+}
+
+:root .pin-edit-button {
+    --button-hover-bg: #2675df;
+    --button-active-bg: #1e63c2;
+}
+
+:root .pin-delete-button {
+    --button-hover-bg: #d53e30;
+    --button-active-bg: #bc3327;
+}
+
+:root .navbar-account-button {
+    --button-hover-bg: #41434d;
+    --button-active-bg: #505360;
+}
+
+/* Only form fields need a persistent visible boundary. */
+:root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+:root textarea,
+:root select {
+    border: 1px solid var(--border);
+}
+
+:root button:focus:not(:focus-visible) {
+    outline: none;
+}
+
+:root button:focus-visible {
+    outline: 1px solid var(--link);
+    outline-offset: 2px;
+}
+
+:root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+:root textarea:focus,
+:root select:focus {
+    outline: none;
+}
+
+:root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+:root textarea:focus-visible,
+:root select:focus-visible {
+    border-color: var(--link);
+}
+
+:root select:hover:not(:disabled) {
+    border-color: var(--muted);
+}
+
+input, textarea, select {
+    background-color: var(--surface);
+}
+
+input::placeholder, textarea::placeholder {
+    color: var(--muted);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+:root .navbar {
+    background-color: var(--navbar-bg);
+    color: var(--navbar-text);
+}
+
+:root .navbar-title a {
+    color: var(--link);
+}
+
+:root .navbar-account-button {
+    color: var(--navbar-text);
+}
+
+:root .account-dropdown,
+:root .invitations-popup,
+:root .map-sidebar,
+:root .rename-popup,
+:root .delete-popup,
+:root .pin-details-popup,
+:root .pin-search,
+:root .search-results,
+:root .search-results button,
+:root .add-pin-button,
+:root .maplibregl-popup-content,
+:root .customization-menu,
+:root .submap-customization-menu {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border);
+}
+
+:root .map-sidebar.closed {
+    background: transparent;
+}
+
+:root .account-dropdown button,
+:root .invitations-header,
+:root .invitations-section,
+:root .sidebar-header h2,
+:root .sidebar-toggle,
+:root .map-menu-button,
+:root .submap-menu-button,
+:root .dropdown-button,
+:root .pin-dropdown-button,
+:root .pin-map-expand,
+:root .pin-popup strong,
+:root .pin-popup-maps,
+:root .pin-popup-notes span,
+:root .pin-delete-message,
+:root .maplibregl-popup-close-button {
+    color: var(--text);
+}
+
+:root .no-invitations,
+:root .pin-delete-permission-message {
+    color: var(--muted);
+}
+
+:root .customization-menu button {
+    background: var(--control-bg);
+    color: var(--text);
+}
+
+:root .account-dropdown button:hover,
+:root .search-results button:hover,
+:root .pin-map-row:hover,
+:root .map-item:hover,
+:root .submap-item:hover,
+:root .map-menu-button:hover,
+:root .submap-menu-button:hover,
+:root .customization-menu button:hover,
+:root .sidebar-toggle:hover {
+    background: var(--hover-bg);
+}
+
+:root .invitation-item,
+:root .pin-popup-buttons,
+:root .pin-search input {
+    border-color: var(--border);
+}
+
+:root .get-started-button,
+:root .pin-edit-button,
+:root .pin-delete-button {
+    color: #fff;
+}
+
+:root .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+:root .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+:root .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+    border-bottom-color: var(--surface);
+}
+
+:root .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+:root .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+:root .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+    border-top-color: var(--surface);
+}
+
+:root .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+    border-right-color: var(--surface);
+}
+
+:root .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+    border-left-color: var(--surface);
+}
