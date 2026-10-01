@@ -34,7 +34,6 @@ html, body, #root {
     background-color: white;
     cursor: pointer;
     font-size: 15px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     color: #333;
 }
 
@@ -187,9 +186,6 @@ html, body, #root {
     font-size: 14px;
 }
 
-.pin-details-buttons button:hover {
-    opacity: 0.85;
-}
 
 .pin-map-expand {
     width: 20px;
@@ -396,9 +392,6 @@ html, body, #root {
     color: white;
 }
 
-.pin-popup-buttons button:hover {
-    opacity: 0.85;
-}
 
 .pin-delete-message {
     margin: 0 0 20px 0;

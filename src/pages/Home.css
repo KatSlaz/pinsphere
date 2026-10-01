@@ -34,14 +34,6 @@
     color: white;
     border: none;
     cursor: pointer;
-    outline: 3px solid transparent;
-    outline-offset: 0px;
-    transition: outline 0.2s ease, outline-offset 0.2s ease;
     border-radius: 5px;
 }
 
-.get-started-button:hover, .get-started-button:active {
-    background-color: #45a049;
-    outline: 3px solid #007bff;
-    outline-offset: 4px;
-}

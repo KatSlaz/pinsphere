@@ -194,6 +194,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                     <div className="checkbox-container">
                                         <input
                                             type="checkbox"
+                                            style={{ accentColor: map.color }}
                                             checked={map.visible}
 
                                             //updates the map visibility when checkbox is clicked.
@@ -204,7 +205,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                         />
                                     </div>
 
-                                    <span className="map-name" style={{ color: map.color }}>{map.name}</span>
+                                    <span className="map-name">{map.name}</span>
 
                                 {(!map.isDefault && canEdit || canLeave) && (
                                     <button 
@@ -229,11 +230,12 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                             onClick={() => toggleSubmap(map.id, submap.id)}>
                                             <input
                                                 type="checkbox"
+                                                style={{ accentColor: submap.color }}
                                                 checked={submap.visible}
                                                 onChange={() => toggleSubmap(map.id, submap.id)}
                                                 onClick={(event) => event.stopPropagation()}
                                             />
-                                            <span className="submap-name" style={{ color: submap.color }}>
+                                            <span className="submap-name">
                                                 {submap.name}
                                             </span>
                                             {canEdit && (

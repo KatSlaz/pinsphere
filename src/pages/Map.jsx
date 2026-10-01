@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import MapSidebar from '../components/MapSidebar';
 import { supabase } from '../supabaseClient';
+import { MAP_STYLES } from '../mapStyles';
 
 const getMapSelectionId = (id) => `map:${id}`;
 const getSubmapSelectionId = (id) => `submap:${id}`;
@@ -14,7 +15,7 @@ const canEditPinInMaps = (pin, maps) => maps.some(map => canEditMap(map) && (
     map.submaps.some(submap => pin.maps.includes(getSubmapSelectionId(submap.id)))
 ));
 
-function PinSphereMap() {
+function PinSphereMap({ mapStyle }) {
 
     
     //keeps track of whether the sidebar is open or closed. 
@@ -801,7 +802,7 @@ function PinSphereMap() {
                             width: '100%',
                             height: '100%'
                         }}
-                        mapStyle="https://tiles.openfreemap.org/styles/fiord"
+                        mapStyle={MAP_STYLES.find(style => style.id === mapStyle)?.url || MAP_STYLES[0].url}
                         onClick={(event) => {
                             if (!addingPin) return;
                             setNewPin({
@@ -880,7 +881,6 @@ function PinSphereMap() {
                                                     <div key={map.id} className="pin-popup-map">
                                                         <div
                                                             className="pin-popup-map-name"
-                                                            style={{ color: map.color }}
                                                         >
                                                             {map.name}
                                                         </div>
@@ -891,7 +891,6 @@ function PinSphereMap() {
                                                                     <div
                                                                         key={submap.id}
                                                                         className="pin-popup-submap-name"
-                                                                        style={{ color: submap.color }}
                                                                     >
                                                                         {submap.name}
                                                                     </div>
@@ -986,6 +985,7 @@ function PinSphereMap() {
 
                                                 <input
                                                     type="checkbox"
+                                                    style={{ accentColor: map.color }}
                                                     checked={selectedMaps.includes(getMapSelectionId(map.id))}
                                                     disabled={!canEditMap(map)}
                                                     onChange={() => togglePinMap(map.id)}
@@ -993,7 +993,6 @@ function PinSphereMap() {
 
                                                 <span
                                                     className="pin-map-name"
-                                                    style={{ color: map.color }}
                                                 >
                                                     {map.name}
                                                 </span>
@@ -1012,6 +1011,7 @@ function PinSphereMap() {
 
                                                             <input
                                                                 type="checkbox"
+                                                                style={{ accentColor: submap.color }}
                                                                 checked={selectedMaps.includes(getSubmapSelectionId(submap.id))}
                                                                 disabled={!canEditMap(map)}
                                                                 onChange={() => togglePinSubmap(
@@ -1022,7 +1022,6 @@ function PinSphereMap() {
 
                                                             <span
                                                                 className="pin-submap-name"
-                                                                style={{ color: submap.color }}
                                                             >
                                                                 {submap.name}
                                                             </span>
