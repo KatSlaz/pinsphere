@@ -1,5 +1,9 @@
 import Map, { Marker, Popup } from '@vis.gl/react-maplibre';
+import { setWorkerUrl } from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+setWorkerUrl(workerUrl);
 import './Map.css';
 import Navbar from '../components/Navbar';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
