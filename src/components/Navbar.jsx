@@ -111,8 +111,10 @@ function Navbar() {
     };
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        window.location.href = '/login';
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            alert(error.message);
+        }
     };
 
     return (
