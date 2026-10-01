@@ -159,7 +159,8 @@
     transition: opacity 0.1s ease;
 }
 
-.map-item:hover .map-menu-button {
+.map-item:hover .map-menu-button,
+.map-item:focus-within .map-menu-button {
     opacity: 1;
     pointer-events: auto;
 }
