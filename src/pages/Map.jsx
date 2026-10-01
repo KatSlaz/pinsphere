@@ -2,10 +2,17 @@ import Map, { Marker, Popup } from '@vis.gl/react-maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './Map.css';
 import Navbar from '../components/Navbar';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import MapSidebar from '../components/MapSidebar';
 import { supabase } from '../supabaseClient';
 
+const getMapSelectionId = (id) => `map:${id}`;
+const getSubmapSelectionId = (id) => `submap:${id}`;
+const canEditMap = (map) => map?.role === 'owner' || map?.role === 'editor';
+const canEditPinInMaps = (pin, maps) => maps.some(map => canEditMap(map) && (
+    pin.maps.includes(getMapSelectionId(map.id)) ||
+    map.submaps.some(submap => pin.maps.includes(getSubmapSelectionId(submap.id)))
+));
 
 function TravelMap() {
 
@@ -26,7 +33,93 @@ function TravelMap() {
     const [editingPin, setEditingPin] = useState(null);
     const [pinNotes, setPinNotes] = useState('');
     const [deletingPin, setDeletingPin] = useState(null);
+    const [canDeleteEverywhere, setCanDeleteEverywhere] = useState(null);
+    const [deletePermissionError, setDeletePermissionError] = useState('');
+    const [pinActionPending, setPinActionPending] = useState(false);
+    const pinActionRef = useRef(false);
+    const deleteCheckRef = useRef(0);
     const [checkingUser, setCheckingUser] = useState(true);
+    const [leavingMapId, setLeavingMapId] = useState(null);
+    const leavingMapRef = useRef(false);
+    const [currentUserId, setCurrentUserId] = useState(null);
+    const [maps, setMaps] = useState([]);
+    const [loadingMaps, setLoadingMaps] = useState(true);
+    const pinLoadRef = useRef(0);
+
+    const loadPins = useCallback(async (accessMaps) => {
+        const requestId = ++pinLoadRef.current;
+        const { data: userData, error: userError } =
+            await supabase.auth.getUser();
+
+        if (userError || !userData.user) {
+            console.error('Error getting user:', userError);
+            return;
+        }
+
+        const userId = userData.user.id;
+        if (requestId !== pinLoadRef.current) return;
+        setCurrentUserId(userId);
+
+        // RLS returns personal pins and pins on accessible shared maps.
+        const { data: pinData, error: pinError } = await supabase
+            .from('pins')
+            .select('*');
+
+        if (requestId !== pinLoadRef.current) return;
+
+        if (pinError) {
+            console.error('Error loading pins:', JSON.stringify(pinError, null, 2));
+            return;
+        }
+
+        if (pinData.length === 0) {
+            setPins([]);
+            setSelectedPin(null);
+            setEditingPin(null);
+            setDeletingPin(null);
+            return;
+        }
+
+        // Get the map/submap connections for these pins
+        const { data: pinMapData, error: pinMapError } = await supabase
+            .from('pin_maps')
+            .select('*')
+            .in(
+                'pin_id',
+                pinData.map(pin => pin.id)
+            );
+
+        if (pinMapError) {
+            console.error('Error loading pin map connections:', pinMapError);
+            return;
+        }
+
+        const loadedPins = pinData.map(pin => ({
+            id: pin.id,
+            userId: pin.user_id,
+            name: pin.name,
+            longitude: pin.longitude,
+            latitude: pin.latitude,
+            notes: pin.notes || '',
+            maps: pinMapData
+                .filter(connection => connection.pin_id === pin.id)
+                .map(connection => {
+                    if (connection.map_id !== null) {
+                        return getMapSelectionId(connection.map_id);
+                    }
+
+                    return getSubmapSelectionId(connection.submap_id);
+                })
+        }));
+
+        if (requestId !== pinLoadRef.current) return;
+        setPins(loadedPins);
+        setSelectedPin(prev => prev ? loadedPins.find(pin => pin.id === prev.id) || null : null);
+        setEditingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && canEditPinInMaps(pin, accessMaps)) ? prev : null);
+        setDeletingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && (
+            canEditPinInMaps(pin, accessMaps) || pin.maps.length === 0 && pin.userId === userId
+        )) ? prev : null);
+    }, []);
 
     useEffect(() => {
         const loadMaps = async () => {
@@ -182,8 +275,7 @@ function TravelMap() {
             console.log('Current user ID:', userId);
             console.log('Maps from Supabase:', finalMapData);
             console.log('Collaborators:', collaboratorData);
-            setMaps(
-                finalMapData.map(map => {
+            const loadedMaps = finalMapData.map(map => {
                     const collaborator = (collaboratorData || []).find(
                         item => item.map_id === map.id
                     );
@@ -205,11 +297,12 @@ function TravelMap() {
                                 visible: false,
                                 color: submap.color
                         }))
-            }}))
-            ;
+            }});
+            setMaps(loadedMaps);
 
             setLoadingMaps(false);
             setCheckingUser(false);
+            await loadPins(loadedMaps);
         };
 
         loadMaps();
@@ -223,75 +316,7 @@ function TravelMap() {
         return () => {
             window.removeEventListener('mapsUpdated', handleMapsUpdated);
         };
-        }, []);
-
-    const getMapSelectionId = (id) => `map:${id}`;
-    const getSubmapSelectionId = (id) => `submap:${id}`;
-
-    const loadPins = async () => {
-        const { data: userData, error: userError } =
-            await supabase.auth.getUser();
-
-        if (userError || !userData.user) {
-            console.error('Error getting user:', userError);
-            return;
-        }
-
-        const userId = userData.user.id;
-
-        // Get all pins belonging to this user
-        const { data: pinData, error: pinError } = await supabase
-            .from('pins')
-            .select('*')
-            .eq('user_id', userId);
-
-        if (pinError) {
-            console.error('Error loading pins:', JSON.stringify(pinError, null, 2));
-            return;
-        }
-
-        if (pinData.length === 0) {
-            setPins([]);
-            return;
-        }
-
-        // Get the map/submap connections for these pins
-        const { data: pinMapData, error: pinMapError } = await supabase
-            .from('pin_maps')
-            .select('*')
-            .in(
-                'pin_id',
-                pinData.map(pin => pin.id)
-            );
-
-        if (pinMapError) {
-            console.error('Error loading pin map connections:', pinMapError);
-            return;
-        }
-
-        const loadedPins = pinData.map(pin => ({
-            id: pin.id,
-            name: pin.name,
-            longitude: pin.longitude,
-            latitude: pin.latitude,
-            notes: pin.notes || '',
-            maps: pinMapData
-                .filter(connection => connection.pin_id === pin.id)
-                .map(connection => {
-                    if (connection.map_id !== null) {
-                        return getMapSelectionId(connection.map_id);
-                    }
-
-                    return getSubmapSelectionId(connection.submap_id);
-                })
-        }));
-
-        setPins(loadedPins);
-    };
-
-    useEffect(() => {
-        loadPins();
-    }, []);
+        }, [loadPins]);
 
     useEffect(() => {
         const map = mapRef.current?.getMap();
@@ -306,8 +331,11 @@ function TravelMap() {
     "visible" determines whether that map's locations should appear.
     "isDefault" identifies built-in maps such as "All Places" which cannot be renamed or deleted.
     */
-    const [maps, setMaps] = useState([]);
-    const [loadingMaps, setLoadingMaps] = useState(true);
+    const canEditPin = (pin) => canEditPinInMaps(pin, maps);
+    const canModifySelection = (id) => maps.some(map => canEditMap(map) && (
+        id === getMapSelectionId(map.id) ||
+        map.submaps.some(submap => id === getSubmapSelectionId(submap.id))
+    ));
     
     const togglePinMap = (id) => {
         setSelectedMaps(prev => {
@@ -315,13 +343,13 @@ function TravelMap() {
 
             const clickedMap = maps.find(map => map.id === id);
 
-            if (!clickedMap) {
+            if (!canEditMap(clickedMap)) {
                 return [...selected];
             }
 
             // All Places selects or deselects everything
             if (clickedMap.isDefault) {
-                const allIds = maps.flatMap(map => [
+                const allIds = maps.filter(canEditMap).flatMap(map => [
                     getMapSelectionId(map.id),
                     ...map.submaps.map(submap =>
                         getSubmapSelectionId(submap.id)
@@ -332,7 +360,9 @@ function TravelMap() {
                     selectionId => selected.has(selectionId)
                 );
 
-                return everythingSelected ? [] : allIds;
+                const updated = new Set(selected);
+                allIds.forEach(id => everythingSelected ? updated.delete(id) : updated.add(id));
+                return [...updated];
             }
 
             const mapSelectionId = getMapSelectionId(id);
@@ -365,7 +395,7 @@ function TravelMap() {
 
             // Check whether every map and submap is selected
             const allIds = maps
-                .filter(map => !map.isDefault)
+                .filter(map => !map.isDefault && canEditMap(map))
                 .flatMap(map => [
                     getMapSelectionId(map.id),
                     ...map.submaps.map(submap =>
@@ -404,6 +434,7 @@ function TravelMap() {
     };
 
     const togglePinSubmap = (mapId, submapId) => {
+        if (!canEditMap(maps.find(map => map.id === mapId))) return;
         setSelectedMaps(prev => {
             const selected = new Set(prev);
 
@@ -438,7 +469,7 @@ function TravelMap() {
 
             // Check whether everything is selected
             const allIds = maps
-                .filter(map => !map.isDefault)
+                .filter(map => !map.isDefault && canEditMap(map))
                 .flatMap(map => [
                     getMapSelectionId(map.id),
                     ...map.submaps.map(submap =>
@@ -524,9 +555,142 @@ function TravelMap() {
         });
     };
 
-    const handleLogout = async () => {
-        await supabase.auth.signOut();
-        window.location.href = '/login';
+    const handleLeaveMap = async (mapId) => {
+        const map = maps.find(map => map.id === mapId);
+
+        if (!map || !['editor', 'viewer'].includes(map.role) || leavingMapRef.current) {
+            return false;
+        }
+
+        leavingMapRef.current = true;
+        setLeavingMapId(mapId);
+
+        try {
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+
+            if (userError || !userData.user) {
+                throw userError || new Error('You must be logged in to leave a map.');
+            }
+
+            // Confirm ownership from the database before removing membership.
+            const { data: currentMap, error: mapError } = await supabase
+                .from('maps')
+                .select('user_id')
+                .eq('id', mapId)
+                .single();
+
+            if (mapError) throw mapError;
+            if (currentMap.user_id === userData.user.id) {
+                throw new Error('Owners cannot leave their own maps.');
+            }
+
+            const { data: removedMemberships, error } = await supabase
+                .from('map_collaborators')
+                .delete()
+                .eq('map_id', mapId)
+                .eq('user_id', userData.user.id)
+                .select('map_id, user_id');
+
+            if (error) throw error;
+            if (!removedMemberships || removedMemberships.length !== 1) {
+                throw new Error('Could not confirm that you left the map. Your membership may already be removed, or database permissions may block leaving. Please reload and try again.');
+            }
+
+            const removedSelectionIds = new Set([
+                getMapSelectionId(mapId),
+                ...map.submaps.map(submap => getSubmapSelectionId(submap.id))
+            ]);
+
+            setMaps(prevMaps => prevMaps.filter(item => item.id !== mapId));
+            ++pinLoadRef.current;
+            const remainingSelectionIds = new Set(maps.filter(item => item.id !== mapId).flatMap(item => [
+                getMapSelectionId(item.id),
+                ...item.submaps.map(submap => getSubmapSelectionId(submap.id))
+            ]));
+            setPins(prev => prev.filter(pin => pin.userId === userData.user.id ||
+                pin.maps.some(id => remainingSelectionIds.has(id))
+            ));
+            setSelectedMaps(prev => prev.filter(id => !removedSelectionIds.has(id)));
+            setExpandedPinMaps(prev => prev.filter(id => id !== mapId));
+
+            // Close pin dialogs holding selections from the map we just left.
+            if ([selectedPin, editingPin, deletingPin].some(pin =>
+                pin?.maps.some(id => removedSelectionIds.has(id))
+            )) {
+                setSelectedPin(null);
+                setEditingPin(null);
+                setDeletingPin(null);
+                setNewPin(null);
+                setPinName('');
+                setPinNotes('');
+                setSelectedMaps([]);
+            }
+
+            await loadPins(maps.filter(item => item.id !== mapId));
+            return true;
+        } catch (error) {
+            console.error('Error leaving map:', error);
+            alert(error.message || 'Could not leave the map. Please try again.');
+            return false;
+        } finally {
+            leavingMapRef.current = false;
+            setLeavingMapId(null);
+        }
+    };
+
+    const openDeletePin = async (pin) => {
+        const requestId = ++deleteCheckRef.current;
+        setDeletingPin(pin);
+        setSelectedPin(null);
+        setCanDeleteEverywhere(null);
+        setDeletePermissionError('');
+
+        try {
+            // The server must check every connection, including hidden destinations.
+            const { data, error } = await supabase.rpc('can_delete_pin_everywhere', {
+                p_pin_id: pin.id
+            });
+
+            if (requestId !== deleteCheckRef.current) return;
+            if (error || typeof data !== 'boolean') {
+                throw error || new Error('Invalid deletion permission response');
+            }
+            setCanDeleteEverywhere(data);
+        } catch (error) {
+            if (requestId !== deleteCheckRef.current) return;
+            console.error('Error checking pin deletion permission:', error);
+            setCanDeleteEverywhere(false);
+            setDeletePermissionError('Could not verify deletion permission. Please try again after database support is available.');
+        }
+    };
+
+    const handleDeletePinEverywhere = async () => {
+        if (!deletingPin || canDeleteEverywhere !== true || pinActionRef.current) return;
+        pinActionRef.current = true;
+        setPinActionPending(true);
+        try {
+            // This RPC must recheck all destinations atomically before deleting.
+            const { data, error } = await supabase.rpc('delete_pin_everywhere', {
+                p_pin_id: deletingPin.id
+            });
+            if (error || data !== true) {
+                console.error('Error deleting pin everywhere:', error);
+                setCanDeleteEverywhere(false);
+                setDeletePermissionError('Could not delete this pin everywhere. All destinations must still allow you to edit.');
+                return;
+            }
+
+            setPins(prev => prev.filter(pin => pin.id !== deletingPin.id));
+            setDeletingPin(null);
+            await loadPins(maps);
+        } catch (error) {
+            console.error('Error deleting pin everywhere:', error);
+            setCanDeleteEverywhere(false);
+            setDeletePermissionError('Could not delete the pin. Please try again.');
+        } finally {
+            pinActionRef.current = false;
+            setPinActionPending(false);
+        }
     };
 
     if (checkingUser || loadingMaps) {
@@ -545,6 +709,8 @@ function TravelMap() {
                     setIsOpen={setSidebarOpen} 
                     maps={maps}
                     setMaps={setMaps}
+                    onLeaveMap={handleLeaveMap}
+                    leavingMapId={leavingMapId}
                 />
 
                 <div className="map-wrapper">
@@ -743,7 +909,9 @@ function TravelMap() {
                                             })}
                                     </div>
 
+                                    {(canEditPin(selectedPin) || selectedPin.maps.length === 0 && selectedPin.userId === currentUserId) && (
                                     <div className="pin-popup-buttons">
+                                        {canEditPin(selectedPin) && (
                                         <button
                                             className="pin-edit-button"
                                             onClick={() => {
@@ -756,17 +924,16 @@ function TravelMap() {
                                         >
                                             Edit Pin
                                         </button>
+                                        )}
 
                                         <button
                                             className="pin-delete-button"
-                                            onClick={() => {
-                                                setDeletingPin(selectedPin);
-                                                setSelectedPin(null);
-                                            }}
+                                            onClick={() => openDeletePin(selectedPin)}
                                         >
-                                            Delete Pin
+                                            Delete Pin Everywhere
                                         </button>
                                     </div>
+                                    )}
                                 </div>
                             </Popup>
                         )}
@@ -776,6 +943,9 @@ function TravelMap() {
                         <div className="pin-details-overlay">
                             <div className="pin-details-popup">
                                 <h3>{editingPin ? 'Edit Pin' : 'Add Pin'}</h3>
+                                {editingPin && (
+                                    <p>Changes to this pin's details apply everywhere it appears.</p>
+                                )}
 
                                 <input
                                     type="text"
@@ -794,7 +964,7 @@ function TravelMap() {
                                 <h4>Choose Maps</h4>
 
                                 <div className="pin-map-list">
-                                    {maps.map((map) => (
+                                    {maps.filter(canEditMap).map((map) => (
                                         <div key={map.id}>
 
                                             {/* Parent map */}
@@ -819,6 +989,7 @@ function TravelMap() {
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedMaps.includes(getMapSelectionId(map.id))}
+                                                    disabled={!canEditMap(map)}
                                                     onChange={() => togglePinMap(map.id)}
                                                 />
 
@@ -844,6 +1015,7 @@ function TravelMap() {
                                                             <input
                                                                 type="checkbox"
                                                                 checked={selectedMaps.includes(getSubmapSelectionId(submap.id))}
+                                                                disabled={!canEditMap(map)}
                                                                 onChange={() => togglePinSubmap(
                                                                     map.id,
                                                                     submap.id
@@ -885,21 +1057,63 @@ function TravelMap() {
                                                 return;
                                             }
 
-                                            if (selectedMaps.length === 0) {
+                                            const { data: userData, error: userError } = await supabase.auth.getUser();
+                                            if (userError || !userData.user) {
+                                                alert('You must be logged in to save a pin.');
+                                                return;
+                                            }
+                                            if (editingPin && !canEditPin(editingPin)) {
+                                                alert('You must be an owner or editor of a connected map to edit this pin.');
+                                                return;
+                                            }
+                                            const defaultSelectionId = getMapSelectionId(maps.find(map => map.isDefault)?.id);
+                                            const newSelections = selectedMaps.filter(id => id !== defaultSelectionId &&
+                                                !editingPin?.maps.includes(id)
+                                            );
+                                            if (newSelections.some(id => !canModifySelection(id))) {
+                                                alert('You can only add pins to maps where you are an owner or editor.');
+                                                return;
+                                            }
+
+                                            let hasDestination = selectedMaps.some(id => id !== defaultSelectionId) ||
+                                                editingPin?.maps.some(id => !canModifySelection(id));
+
+                                            if (!hasDestination && editingPin) {
+                                                try {
+                                                    // A linked, editable pin may also have hidden read-only
+                                                    // connections. The existing RPC checks those without
+                                                    // revealing their destinations; they will be preserved.
+                                                    const { data, error } = await supabase.rpc('can_delete_pin_everywhere', {
+                                                        p_pin_id: editingPin.id
+                                                    });
+                                                    if (error || typeof data !== 'boolean') {
+                                                        throw error || new Error('Invalid pin permission response');
+                                                    }
+                                                    hasDestination = data === false;
+                                                } catch (error) {
+                                                    console.error('Error checking preserved pin connections:', error);
+                                                    alert('Could not verify remaining connections. Please try again.');
+                                                    return;
+                                                }
+                                            }
+
+                                            if (!hasDestination) {
                                                 alert('Please select at least one map.');
                                                 return;
                                             }
 
                                             if (editingPin) {
-                                                const { error: pinError } = await supabase
+                                                const { data: updatedPin, error: pinError } = await supabase
                                                     .from('pins')
                                                     .update({
                                                         name: pinName.trim(),
                                                         notes: pinNotes.trim()
                                                     })
-                                                    .eq('id', editingPin.id);
+                                                    .eq('id', editingPin.id)
+                                                    .select('id')
+                                                    .single();
 
-                                                if (pinError) {
+                                                if (pinError || !updatedPin) {
                                                     console.error(
                                                         'Error updating pin:',
                                                         JSON.stringify(pinError, null, 2)
@@ -908,21 +1122,29 @@ function TravelMap() {
                                                     return;
                                                 }
 
-                                                const { error: deleteMapError } = await supabase
-                                                    .from('pin_maps')
-                                                    .delete()
-                                                    .eq('pin_id', editingPin.id);
+                                                // Leave unchanged and read-only connections intact.
+                                                const removedSelections = editingPin.maps.filter(id =>
+                                                    !selectedMaps.includes(id) && canModifySelection(id)
+                                                );
+                                                for (const id of removedSelections) {
+                                                    const isMap = id.startsWith('map:');
+                                                    const { data: removedRows, error: deleteMapError } = await supabase
+                                                        .from('pin_maps')
+                                                        .delete()
+                                                        .eq('pin_id', editingPin.id)
+                                                        .eq(isMap ? 'map_id' : 'submap_id', Number(id.split(':')[1]))
+                                                        .select('id');
 
-                                                if (deleteMapError) {
-                                                    console.error(
-                                                        'Error removing old pin maps:',
-                                                        JSON.stringify(deleteMapError, null, 2)
-                                                    );
-                                                    alert('Could not update the pin maps.');
-                                                    return;
+                                                    if (deleteMapError || !removedRows?.length) {
+                                                        console.error('Error removing pin connection:', deleteMapError);
+                                                        alert('Could not remove a pin connection. Your map permissions may have changed.');
+                                                        await loadPins(maps);
+                                                        setEditingPin(null);
+                                                        return;
+                                                    }
                                                 }
 
-                                                const pinMapRows = selectedMaps
+                                                const pinMapRows = newSelections
                                                     .filter(selectionId => {
                                                         if (selectionId.startsWith('map:')) {
                                                             const mapId = Number(
@@ -967,6 +1189,8 @@ function TravelMap() {
                                                             JSON.stringify(pinMapError, null, 2)
                                                         );
                                                         alert('Could not save the pin maps.');
+                                                        await loadPins(maps);
+                                                        setEditingPin(null);
                                                         return;
                                                     }
                                                 }
@@ -978,20 +1202,16 @@ function TravelMap() {
                                                                 ...pin,
                                                                 name: pinName.trim(),
                                                                 notes: pinNotes.trim(),
-                                                                maps: selectedMaps
+                                                                maps: [...new Set([
+                                                                    ...selectedMaps,
+                                                                    ...editingPin.maps.filter(id => !canModifySelection(id))
+                                                                ])]
                                                             }
                                                             : pin
                                                     )
                                                 );
+                                                await loadPins(maps);
                                             } else {
-                                                const { data: userData, error: userError } =
-                                                    await supabase.auth.getUser();
-
-                                                if (userError || !userData.user) {
-                                                    alert('You must be logged in to create a pin.');
-                                                    return;
-                                                }
-
                                                 // Create the pin itself
                                                 const { data: newPinData, error: pinError } = await supabase
                                                     .from('pins')
@@ -1065,6 +1285,7 @@ function TravelMap() {
 
                                                 const pin = {
                                                     id: newPinData.id,
+                                                    userId: newPinData.user_id,
                                                     name: newPinData.name,
                                                     longitude: newPinData.longitude,
                                                     latitude: newPinData.latitude,
@@ -1092,15 +1313,22 @@ function TravelMap() {
                     {deletingPin && (
                         <div className="pin-details-overlay">
                             <div className="pin-details-popup">
-                                <h3>Delete Pin</h3>
+                                <h3>Delete Pin Everywhere?</h3>
 
                                 <p>
-                                    Are you sure you want to delete "{deletingPin.name}"?
+                                    Delete "{deletingPin.name}" everywhere? This deletes the pin and all its map and submap connections.
                                 </p>
+                                {canDeleteEverywhere === null && <p>Checking deletion permission...</p>}
+                                {deletePermissionError && <p>{deletePermissionError}</p>}
+                                {canDeleteEverywhere === false && !deletePermissionError && (
+                                    <p className="pin-delete-permission-message">This pin also belongs to a map you can't edit, so it can't be deleted everywhere.</p>
+                                )}
 
                                 <div className="pin-details-buttons">
                                     <button
+                                        disabled={pinActionPending}
                                         onClick={() => {
+                                            ++deleteCheckRef.current;
                                             setDeletingPin(null);
                                         }}
                                     >
@@ -1109,30 +1337,10 @@ function TravelMap() {
 
                                     <button
                                         className="pin-delete-button"
-                                        onClick={async () => {
-                                            const { error: pinError } = await supabase
-                                            .from('pins')
-                                            .delete()
-                                            .eq('id', deletingPin.id);
-
-                                        if (pinError) {
-                                            console.error(
-                                                'Error deleting pin:',
-                                                JSON.stringify(pinError, null, 2)
-                                            );
-                                            alert('Could not delete the pin.');
-                                            return;
-                                        }
-
-                                        setPins(prevPins =>
-                                            prevPins.filter(pin => pin.id !== deletingPin.id)
-                                        );
-
-                                        setDeletingPin(null);
-
-                                        }}
+                                        disabled={pinActionPending || canDeleteEverywhere !== true}
+                                        onClick={handleDeletePinEverywhere}
                                     >
-                                        Delete Pin
+                                        {pinActionPending ? 'Deleting...' : 'Delete Pin Everywhere'}
                                     </button>
                                 </div>
                             </div>

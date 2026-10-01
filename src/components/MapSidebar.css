@@ -239,7 +239,8 @@
     margin-top: 0;
 }
 
-.rename-popup input {
+.rename-popup input,
+.rename-popup select {
     width: 100%;
     box-sizing: border-box;
     padding: 8px;

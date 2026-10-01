@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
+function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId }) {
     
     // Keeps track of which map is currently being customized with null meaning no map is being customized.
     const [customizingMap, setCustomizingMap] = useState(null);
@@ -26,6 +26,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
     const [newColor, setNewColor] = useState('#3388ff');
     const [sharingMap, setSharingMap] = useState(null);
     const [collaboratorEmail, setCollaboratorEmail] = useState('');
+    const [collaboratorRole, setCollaboratorRole] = useState('viewer');
+    const [leavingMap, setLeavingMap] = useState(null);
     
     // Closes the customization menu if the user clicks outside of it.
     useEffect(() => {
@@ -168,6 +170,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                     {maps.map(map => {
                         const isOwner = map.role === 'owner';
                         const canEdit = map.role === 'owner' || map.role === 'editor';
+                        const canLeave = map.role === 'editor' || map.role === 'viewer';
 
                         return (
                         
@@ -203,7 +206,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
 
                                     <span className="map-name" style={{ color: map.color }}>{map.name}</span>
 
-                                {!map.isDefault && canEdit && (
+                                {(!map.isDefault && canEdit || canLeave) && (
                                     <button 
                                     className="map-menu-button"
                                     onClick={(event) => {
@@ -454,6 +457,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                                 event.stopPropagation();
                                                 setSharingMap(map);
                                                 setCollaboratorEmail('');
+                                                setCollaboratorRole('viewer');
                                                 setCustomizingMap(null);
                                             }}>
                                                 invite collaborator
@@ -488,6 +492,43 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                         </button>
                                     </>
                                 )}
+                                    {canLeave && (
+                                        <button onClick={(event) => {
+                                            event.stopPropagation();
+                                            setLeavingMap(map.id);
+                                            setCustomizingMap(null);
+                                        }}>
+                                            leave map
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {leavingMap === map.id && canLeave && (
+                                <div className="rename-overlay">
+                                    <div className="delete-popup" onClick={(event) => event.stopPropagation()}>
+                                        <h3>Leave Map?</h3>
+                                        <p>Leave "{map.name}"? You will lose access. The map and its contents will remain for everyone else.</p>
+                                        <div className="delete-buttons">
+                                            <button disabled={leavingMapId !== null} onClick={() => setLeavingMap(null)}>
+                                                Cancel
+                                            </button>
+                                            <button disabled={leavingMapId !== null} onClick={async () => {
+                                                const success = await onLeaveMap(map.id);
+                                                if (!success) return;
+
+                                                setExpandedMaps(prev => prev.filter(id => id !== map.id));
+                                                setCustomizingSubmap(null);
+                                                setRenamingSubmap(null);
+                                                setDeletingSubmap(null);
+                                                setChangingColor(null);
+                                                setAddingSubmap(null);
+                                                setLeavingMap(null);
+                                            }}>
+                                                {leavingMapId === map.id ? 'Leaving...' : 'Leave Map'}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
@@ -668,11 +709,22 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                             }
                                         />
 
+                                        <label htmlFor={`collaborator-role-${map.id}`}>Role</label>
+                                        <select
+                                            id={`collaborator-role-${map.id}`}
+                                            value={collaboratorRole}
+                                            onChange={(event) => setCollaboratorRole(event.target.value)}
+                                        >
+                                            <option value="viewer">Viewer</option>
+                                            <option value="editor">Editor</option>
+                                        </select>
+
                                         <div className="rename-buttons">
                                             <button
                                                 onClick={() => {
                                                     setSharingMap(null);
                                                     setCollaboratorEmail('');
+                                                    setCollaboratorRole('viewer');
                                                 }}
                                             >
                                                 Cancel
@@ -688,7 +740,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
                                                         'invite_map_collaborator',
                                                         {
                                                             invite_map_id: sharingMap.id,
-                                                            invite_email: collaboratorEmail.trim()
+                                                            invite_email: collaboratorEmail.trim(),
+                                                            invite_role: collaboratorRole
                                                         }
                                                     );
 
@@ -705,6 +758,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps }) {
 
                                                     setSharingMap(null);
                                                     setCollaboratorEmail('');
+                                                    setCollaboratorRole('viewer');
                                                 }}
                                             >
                                                 Invite

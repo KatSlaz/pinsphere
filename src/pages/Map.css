@@ -405,3 +405,8 @@ html, body, #root {
     color: #333;
     line-height: 1.5;
 }
+
+.pin-delete-permission-message {
+    font-size: 13px;
+    color: #555;
+}
