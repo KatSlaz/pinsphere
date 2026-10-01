@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { DragDropProvider } from '@dnd-kit/react';
 import OrderableRow from './OrderableRow';
 import { moveWithinList } from '../mapOrdering';
+import CollaboratorsModal from './CollaboratorsModal';
 
 function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId, onReorder, orderStatus, onRetryOrder }) {
     
@@ -31,6 +32,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
     const [collaboratorEmail, setCollaboratorEmail] = useState('');
     const [collaboratorRole, setCollaboratorRole] = useState('viewer');
     const [leavingMap, setLeavingMap] = useState(null);
+    const [viewingCollaborators, setViewingCollaborators] = useState(null);
+    const collaboratorsReturnFocus = useRef(null);
     
     // Closes the customization menu if the user clicks outside of it.
     useEffect(() => {
@@ -490,14 +493,17 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                                 invite collaborator
                                             </button>
                                        
+                                    </>
+                                    )}
                                     <button onClick={(event) => {
                                         event.stopPropagation();
-                                        // Implementation for view collaborators
+                                        collaboratorsReturnFocus.current = event.currentTarget
+                                            .closest('.map-item-container').querySelector('.map-menu-button');
+                                        setViewingCollaborators(map);
+                                        setCustomizingMap(null);
                                     }}>
                                         view collaborators
                                     </button>
-                                    </>
-                                    )}
                                     {canEdit && (
                                         <button onClick={(event) => {
                                             event.stopPropagation();
@@ -981,6 +987,11 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
 
             </div>
             
+            {viewingCollaborators && <CollaboratorsModal
+                map={viewingCollaborators}
+                returnFocusRef={collaboratorsReturnFocus}
+                onClose={() => setViewingCollaborators(null)}
+            />}
         </aside>
     )
 }
