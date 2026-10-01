@@ -14,7 +14,7 @@ const canEditPinInMaps = (pin, maps) => maps.some(map => canEditMap(map) && (
     map.submaps.some(submap => pin.maps.includes(getSubmapSelectionId(submap.id)))
 ));
 
-function TravelMap() {
+function PinSphereMap() {
 
     
     //keeps track of whether the sidebar is open or closed. 
@@ -126,7 +126,7 @@ function TravelMap() {
             const { data: userData } = await supabase.auth.getUser();
 
             if (!userData.user) {
-                window.location.href = '/login';
+                // App handles redirects from Supabase session changes.
                 return;
             }
 
@@ -1360,4 +1360,4 @@ function TravelMap() {
     );
 }
 
-export default TravelMap;
+export default PinSphereMap;

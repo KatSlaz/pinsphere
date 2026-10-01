@@ -1,16 +1,30 @@
-# React + Vite
+# PinSphere
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+PinSphere organizes places into maps, submaps, and location pins. Shared maps support owner, editor, and viewer roles, invitations, and collaboration.
 
-Currently, two official plugins are available:
+Built with React, Vite, MapLibre, and Supabase Auth and database services.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local development
 
-## React Compiler
+Install dependencies with `npm install`. Create a local `.env` file containing:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```dotenv
+VITE_SUPABASE_URL=your-supabase-project-url
+VITE_SUPABASE_KEY=your-supabase-publishable-or-anon-key
+```
 
-## Expanding the ESLint configuration
+Use a client-safe key, never a service-role key. The `.env` file is ignored by Git.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Run `npm run dev` to start the development server.
+
+## Checks and production build
+
+- `npm run lint` checks the frontend with ESLint.
+- `npm run build` creates the production build in `dist`.
+- `npm run preview` serves the production build locally.
+
+## Supabase
+
+Authentication uses Supabase's built-in session persistence. Database access is controlled by Supabase row-level security policies and RPCs.
+
+`supabase/pin-permissions.sql` contains the pin permission SQL prepared for this project. It is not automatically applied by the frontend or build; inspect the live database before applying policy changes.
