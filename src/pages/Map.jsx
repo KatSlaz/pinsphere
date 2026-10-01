@@ -284,7 +284,7 @@ function TravelMap() {
                         id: map.id,
                         name: map.name,
                         visible: false,
-                        isDefault: map.is_default,
+                        isDefault: map.is_default === true && map.user_id === userId && map.name === 'All Places',
                         color: map.color,
                         role: map.user_id === userId
                             ? 'owner'
@@ -329,7 +329,7 @@ function TravelMap() {
     /*
     Stores the maps that the user has available.
     "visible" determines whether that map's locations should appear.
-    "isDefault" identifies built-in maps such as "All Places" which cannot be renamed or deleted.
+    "isDefault" identifies only the signed-in user's own All Places control.
     */
     const canEditPin = (pin) => canEditPinInMaps(pin, maps);
     const canModifySelection = (id) => maps.some(map => canEditMap(map) && (
@@ -528,16 +528,14 @@ function TravelMap() {
     };
 
     const isPinVisible = (pin) => {
-        if (maps.find(map => map.isDefault)?.visible) {
-            return true;
-        }
+        const allPlacesVisible = maps.find(map => map.isDefault)?.visible;
 
         return pin.maps.some(selectionId => {
             if (selectionId.startsWith('map:')) {
                 const mapId = Number(selectionId.replace('map:', ''));
                 const map = maps.find(map => map.id === mapId);
 
-                return map ? map.visible : false;
+                return map ? allPlacesVisible || map.visible : false;
             }
 
             if (selectionId.startsWith('submap:')) {
@@ -546,7 +544,7 @@ function TravelMap() {
                 return maps.some(map =>
                     map.submaps.some(
                         submap =>
-                            submap.id === submapId && submap.visible
+                            submap.id === submapId && (allPlacesVisible || submap.visible)
                     )
                 );
             }
