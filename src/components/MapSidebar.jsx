@@ -2,8 +2,11 @@ import './MapSidebar.css';
 import { useState } from 'react';
 import { useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { DragDropProvider } from '@dnd-kit/react';
+import OrderableRow from './OrderableRow';
+import { moveWithinList } from '../mapOrdering';
 
-function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId }) {
+function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId, onReorder, orderStatus, onRetryOrder }) {
     
     // Keeps track of which map is currently being customized with null meaning no map is being customized.
     const [customizingMap, setCustomizingMap] = useState(null);
@@ -164,10 +167,28 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                     <h2>My Maps</h2>
                 </header>
 
+                {(orderStatus === 'error' || orderStatus === 'load-error') && (
+                    <div className="order-status" role="status">
+                        {orderStatus === 'error' ? 'Order not saved. Your current order is kept.' : 'Could not load personal order.'}
+                        <button onClick={onRetryOrder}>Retry</button>
+                    </div>
+                )}
+                <DragDropProvider onDragEnd={event => {
+                    if (event.canceled) return;
+                    const source = event.operation.source?.data;
+                    const target = event.operation.target?.data;
+                    if (!source || !target || source.parentId !== target.parentId) return;
+                    const items = source.parentId === null
+                        ? maps.filter(map => !map.isDefault)
+                        : maps.find(map => map.id === source.parentId)?.submaps || [];
+                    const ids = items.map(item => item.id);
+                    const next = moveWithinList(ids, source.itemId, target.itemId);
+                    if (next !== ids) onReorder(source.parentId, next);
+                }}>
                 <div className="map-list">
                     
                     {/* Creates a row for each map in the maps array */}
-                    {maps.map(map => {
+                    {maps.map((map, mapIndex) => {
                         const isOwner = map.role === 'owner';
                         const canEdit = map.role === 'owner' || map.role === 'editor';
                         const canLeave = map.role === 'editor' || map.role === 'viewer';
@@ -176,7 +197,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                         
                         <div key={map.id} className="map-item-container">
                             
-                            <div className="map-item" onClick={() => toggleMap(map.id)}>
+                            <OrderableRow id={map.id} index={mapIndex} name={map.name} fixed={map.isDefault} className="map-item" onClick={() => toggleMap(map.id)}>
                                     <div className="dropdown-container">
                                         <button 
                                             className={`dropdown-button ${
@@ -205,7 +226,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                         />
                                     </div>
 
-                                    <span className="map-name">{map.name}</span>
+                                    <span className="map-name" title={map.name}>{map.name}</span>
 
                                 {(!map.isDefault && canEdit || canLeave) && (
                                     <button 
@@ -218,14 +239,18 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                     }}
                                     >⋮</button>
                                 )}
-                            </div>
+                            </OrderableRow>
 
                             {/* displays the submaps of a map if it is expanded. */}
                             {expandedMaps.includes(map.id) && (
                                 <div className="submap-list">
-                                    {map.submaps.map((submap) => (
-                                        <div 
+                                    {map.submaps.map((submap, submapIndex) => (
+                                        <OrderableRow
                                             key={submap.id} 
+                                            id={submap.id}
+                                            index={submapIndex}
+                                            parentId={map.id}
+                                            name={submap.name}
                                             className="submap-item"
                                             onClick={() => toggleSubmap(map.id, submap.id)}>
                                             <input
@@ -235,7 +260,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                                 onChange={() => toggleSubmap(map.id, submap.id)}
                                                 onClick={(event) => event.stopPropagation()}
                                             />
-                                            <span className="submap-name">
+                                            <span className="submap-name" title={submap.name}>
                                                 {submap.name}
                                             </span>
                                             {canEdit && (
@@ -427,7 +452,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                     </div>     
                                 )                                     
                             }
-                            </div>
+                            </OrderableRow>
                                     ))}
                                 </div>
                             )}
@@ -840,7 +865,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                                                             id: newSubmap.id,
                                                                             name: newSubmap.name,
                                                                             visible: false,
-                                                                            color: newSubmap.color
+                                                                            color: newSubmap.color,
+                                                                            sortOrder: newSubmap.sort_order
                                                                         }
                                                                     ]
                                                                 }
@@ -862,6 +888,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                         );    
                     })}
                 </div>
+                </DragDropProvider>
                 <button className="add-map-button" 
                     onClick={(event) => {
                         event.stopPropagation();
@@ -936,6 +963,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                             visible: false,
                                             isDefault: newMap.is_default,
                                             color: newMap.color,
+                                            sortOrder: newMap.sort_order,
                                             role: 'owner',
                                             submaps: []
                                         }
