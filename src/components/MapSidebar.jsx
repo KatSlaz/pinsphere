@@ -206,12 +206,14 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
                                             className={`dropdown-button ${
                                                 map.submaps.length === 0 ? 'dropdown-button-hidden' : ''
                                             }`}
+                                            aria-label={`${expandedMaps.includes(map.id) ? 'Collapse' : 'Expand'} ${map.name}`}
+                                            aria-expanded={expandedMaps.includes(map.id)}
                                             onClick={(event) => {
                                                 event.stopPropagation();
                                                 toggleExpandMap(map.id);
                                             }}
                                         >
-                                            {expandedMaps.includes(map.id) ? '▾' : '▸'}
+                                            <span className="dropdown-arrow" aria-hidden="true" />
                                         </button>
                                     </div>
 
