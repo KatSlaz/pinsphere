@@ -691,6 +691,7 @@ function PinSphereMap({ mapStyle }) {
                     isOpen={sidebarOpen} 
                     setIsOpen={setSidebarOpen} 
                     maps={maps}
+                    currentUserId={currentUserId}
                     setMaps={setMaps}
                     onLeaveMap={handleLeaveMap}
                     leavingMapId={leavingMapId}
