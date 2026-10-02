@@ -43,16 +43,42 @@
 }
 
 .collaborators-list li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    display: block;
     padding: 10px 0;
     border-bottom: 1px solid var(--border);
 }
 
+.collaborator-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 .collaborator-email {
+    flex: 1;
     min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.collaborator-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    flex: 0 0 auto;
+    max-width: 55%;
+}
+
+.collaborator-controls select {
+    min-width: 0;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.collaborator-feedback {
+    font-size: 12px;
+    color: var(--muted);
     overflow-wrap: anywhere;
 }
 

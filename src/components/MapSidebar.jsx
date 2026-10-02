@@ -7,7 +7,7 @@ import OrderableRow from './OrderableRow';
 import { moveWithinList } from '../mapOrdering';
 import CollaboratorsModal from './CollaboratorsModal';
 
-function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId, onReorder, orderStatus, onRetryOrder }) {
+function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMap, leavingMapId, onReorder, orderStatus, onRetryOrder }) {
     
     // Keeps track of which map is currently being customized with null meaning no map is being customized.
     const [customizingMap, setCustomizingMap] = useState(null);
@@ -991,6 +991,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, onLeaveMap, leavingMapId
             
             {viewingCollaborators && <CollaboratorsModal
                 map={viewingCollaborators}
+                currentUserId={currentUserId}
                 returnFocusRef={collaboratorsReturnFocus}
                 onClose={() => setViewingCollaborators(null)}
             />}
