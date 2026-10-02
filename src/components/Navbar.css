@@ -143,3 +143,31 @@
     color: #777;
     font-size: 14px;
 }
+
+.sent-invitation-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.sent-invitation-item > div {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.sent-invitation-remove {
+    flex-shrink: 0;
+    padding: 2px 7px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.invitations-feedback {
+    color: var(--text);
+    font-size: 14px;
+}
