@@ -6,9 +6,44 @@ html, body, #root {
 
 /* Makes the map page fill the space below the navbar. */
 .map-page {
+    --workspace-gap: 16px;
+    --workspace-sidebar-width: 50px;
     position: relative;
     width: 100%;
     height: calc(100vh - 60px);
+}
+
+.map-page.sidebar-is-open { --workspace-sidebar-width: 250px; }
+
+.map-workspace-controls {
+    position: absolute;
+    inset: var(--workspace-gap) var(--workspace-gap) 64px calc(var(--workspace-sidebar-width) + var(--workspace-gap));
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.map-workspace-controls > * { pointer-events: auto; }
+
+.workspace-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+    .map-page { --workspace-gap: 8px; }
+    /* The open sidebar takes priority over map controls on narrow screens. */
+    .map-page.sidebar-is-open .map-workspace-controls { visibility: hidden; }
 }
 
 /* Makes the map fill the entire map page. */
@@ -38,11 +73,10 @@ html, body, #root {
 }
 
 .add-pin-button {
-    position: absolute;
-    bottom: 40px;
-    right: 15px;
-    z-index: 10;
-    padding: 12px 18px;
+    align-self: flex-end;
+    flex-shrink: 0;
+    max-width: 100%;
+    padding: 8px 12px;
     border: none;
     border-radius: 8px;
     background-color: white;

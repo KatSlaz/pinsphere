@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { createPlaceSearch, normalizeQuery } from '../placeSearch'
+import { createPlaceSearch, normalizeQuery, searchFeedback } from '../placeSearch'
 import './PlaceSearch.css'
 
-export default function PlaceSearch({ getContext, onSelect, onManual, sidebarOpen }) {
+export default function PlaceSearch({ getContext, onSelect, onManual }) {
   const [query, setQuery] = useState('')
   const [state, setState] = useState({ status: 'idle', results: [] })
   const [open, setOpen] = useState(false)
@@ -41,7 +41,8 @@ export default function PlaceSearch({ getContext, onSelect, onManual, sidebarOpe
     onSelect(result)
   }
   const submit = event => { event.preventDefault(); if (!composing.current) search(query, 'forward') }
-  return <div ref={rootRef} className={`place-search${sidebarOpen ? ' sidebar-is-open' : ''}`}>
+  const feedback = searchFeedback(state)
+  return <div ref={rootRef} className="place-search">
     <form className="place-search-form" role="search" onSubmit={submit}>
       <input aria-label="Search businesses, places, or addresses" role="combobox" aria-autocomplete="list"
         aria-expanded={open} aria-controls={`${id}-results`}
@@ -75,11 +76,8 @@ export default function PlaceSearch({ getContext, onSelect, onManual, sidebarOpe
       <button type="submit" disabled={!normalizeQuery(query)}>Search</button>
     </form>
     {open && <div className="place-search-panel">
-      <div className="place-search-status" role="status" aria-live="polite">
-        {state.status === 'loading' ? 'Searching…' : state.status === 'waiting' ? 'Waiting for typing to pause…'
-          : state.status === 'error' ? state.error
-          : state.status === 'ready' ? state.results.length ? `${state.results.length} results. Use arrow keys to choose.` : 'No places found. Try adding a city or place a pin manually.'
-          : 'Type at least 3 letters or numbers for suggestions, or press Search.'}
+      <div className={feedback.quiet ? 'workspace-sr-only' : 'place-search-status'} role="status" aria-live="polite">
+        {feedback.message}
       </div>
       {state.status === 'error' && <button type="button" onClick={() => search(query, lastMode.current)}>Try again</button>}
       <ul id={`${id}-results`} role="listbox" aria-label="Places" aria-busy={state.status === 'loading'} className="place-search-results">

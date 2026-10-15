@@ -27,7 +27,7 @@ function PinSphereMap({ mapStyle }) {
 
     
     //keeps track of whether the sidebar is open or closed. 
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(() => !window.matchMedia('(max-width: 700px)').matches);
 
     const [addingPin, setAddingPin] = useState(false);
     const [newPin, setNewPin] = useState(null);
@@ -69,10 +69,20 @@ function PinSphereMap({ mapStyle }) {
     };
 
     const startManualPlacement = () => {
+        if (window.matchMedia('(max-width: 700px)').matches) setSidebarOpen(false);
         setSearchPreview(null);
         setSelectedPin(null);
         setAddingPin(true);
     };
+
+    useEffect(() => {
+        if (!addingPin) return;
+        const cancel = event => {
+            if (event.key === 'Escape' && !event.isComposing) setAddingPin(false);
+        };
+        document.addEventListener('keydown', cancel, true);
+        return () => document.removeEventListener('keydown', cancel, true);
+    }, [addingPin]);
 
     const previewPlace = (place) => {
         const narrowScreen = window.innerWidth <= 700;
@@ -722,7 +732,7 @@ function PinSphereMap({ mapStyle }) {
         <>
             <Navbar />
 
-            <div className="map-page">
+            <div className={`map-page${sidebarOpen ? ' sidebar-is-open' : ''}`}>
 
                 {/* Sidebar component that allows users to toggle visibility of maps and rename them. */}
                 <MapSidebar 
@@ -739,11 +749,19 @@ function PinSphereMap({ mapStyle }) {
                 />
 
                 <div className="map-wrapper">
-                    <PlaceSearch sidebarOpen={sidebarOpen}
-                        getContext={() => searchContext(mapRef.current)}
-                        onSelect={previewPlace}
-                        onManual={startManualPlacement} />
-                    {addingPin && <p className="manual-pin-hint" role="status">Click the map to place your pin, or cancel manual placement.</p>}
+                    <div className="map-workspace-controls">
+                        <PlaceSearch
+                            getContext={() => searchContext(mapRef.current)}
+                            onSelect={previewPlace}
+                            onManual={startManualPlacement} />
+                        <button type="button" className="add-pin-button" aria-pressed={addingPin}
+                            onClick={() => addingPin ? setAddingPin(false) : startManualPlacement()}>
+                            {addingPin ? 'Cancel placement' : '+ Place Pin Manually'}
+                        </button>
+                    </div>
+                    <span className="workspace-sr-only" role="status">
+                        {addingPin ? 'Placement active. Click the map to place a pin. Press Escape to cancel.' : 'Manual placement inactive.'}
+                    </span>
                     {/* Main map component that displays the map using MapLibre GL. */}
                     <Map ref={mapRef} className="map-container"
                         attributionControl={false}
@@ -1315,15 +1333,6 @@ function PinSphereMap({ mapStyle }) {
                         </div>
                     )}
                     
-                    <button 
-                        className="add-pin-button" 
-                        onClick={() => {
-                            if (addingPin) setAddingPin(false);
-                            else startManualPlacement();
-                        }}
-                    >
-                        {addingPin ? 'Cancel manual placement' : '+ Place Pin Manually'}
-                    </button>
                 </div>
             </div>
         </>

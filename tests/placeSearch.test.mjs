@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canSuggest, createPlaceSearch, normalizePlaces, normalizeQuery, pinDraftFromPlace, searchContext } from '../src/placeSearch.js'
+import { canSuggest, createPlaceSearch, normalizePlaces, normalizeQuery, pinDraftFromPlace, searchContext, searchFeedback } from '../src/placeSearch.js'
+
+test('search feedback keeps useful states visible and successful-result guidance accessible only', () => {
+  assert.deepEqual(searchFeedback({ status: 'waiting' }), { message: '', quiet: true })
+  assert.deepEqual(searchFeedback({ status: 'ready', results: [{}, {}] }), {
+    message: '2 results. Use arrow keys to choose.', quiet: true,
+  })
+  assert.deepEqual(searchFeedback({ status: 'loading' }), { message: 'Searching…', quiet: false })
+  assert.deepEqual(searchFeedback({ status: 'error', error: 'Quota reached.' }), { message: 'Quota reached.', quiet: false })
+  const empty = searchFeedback({ status: 'ready', results: [] })
+  assert.equal(empty.quiet, false)
+  assert.match(empty.message, /No places found/)
+})
 
 const place = (overrides = {}) => ({ place_id: 'a', name: "McDonald's", address_line2: '10 Main St, Atlanta', lat: 33.75, lon: -84.39, result_type: 'amenity', ...overrides })
 const response = results => ({ ok: true, json: async () => ({ results }) })

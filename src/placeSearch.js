@@ -1,5 +1,15 @@
 export const normalizeQuery = value => value.normalize('NFC').trim().replace(/\s+/gu, ' ')
 export const canSuggest = value => (normalizeQuery(value).match(/[\p{L}\p{N}]/gu) || []).length >= 3
+
+export function searchFeedback(state) {
+  if (state.status === 'waiting') return { message: '', quiet: true }
+  if (state.status === 'loading') return { message: 'Searching…', quiet: false }
+  if (state.status === 'error') return { message: state.error, quiet: false }
+  if (state.status === 'ready') return state.results.length
+    ? { message: `${state.results.length} results. Use arrow keys to choose.`, quiet: true }
+    : { message: 'No places found. Try adding a city or place a pin manually.', quiet: false }
+  return { message: 'Type at least 3 letters or numbers for suggestions, or press Search.', quiet: false }
+}
 const areaTypes = new Set(['country', 'state', 'city', 'county', 'district', 'postcode', 'suburb', 'street'])
 
 export function normalizePlaces(body) {
