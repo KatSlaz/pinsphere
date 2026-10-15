@@ -64,6 +64,8 @@
 
 /*ensures sidebar content fades out when the sidebar is closed.*/
 .sidebar-content {
+    box-sizing: border-box;
+    min-height: 0;
     padding: 0.5rem;
     transition: opacity 0.2s ease;
     height: 100%;
@@ -77,6 +79,7 @@
 }
 
 .sidebar-header {
+    flex-shrink: 0;
     position: relative;
     display: flex;
     align-items: center;
@@ -103,7 +106,7 @@
     z-index: 30;
 }
 
-.sidbar-toggle:hover {
+.sidebar-toggle:hover {
     background-color: #f0f0f0;
 }
 
@@ -121,6 +124,7 @@
 .map-list {
     margin-top: 20px;
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -160,7 +164,8 @@
 }
 
 .map-item:hover .map-menu-button,
-.map-item:focus-within .map-menu-button {
+.map-item:focus-within .map-menu-button,
+.map-menu-button[aria-expanded="true"] {
     opacity: 1;
     pointer-events: auto;
 }
@@ -169,33 +174,41 @@
     background-color: #e0e0e0;
 }
 
-.customization-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    border: 1px solid rgb(107, 102, 102);
-    border-radius: 8px;
-    margin-left: 35px;
-    margin-bottom: 8px;
+.sidebar-menu {
+    position: fixed;
+    box-sizing: border-box;
+    width: 176px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
     display: flex;
     flex-direction: column;
-    width: 150px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 20;
-    padding: 1px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+    z-index: 50;
+    padding: 4px;
 }
 
-.customization-menu button {
+.sidebar-menu button {
     width: 100%;
     border: none;
-    background: rgb(107, 102, 102);
-    padding: 8px;
-    text-align: center;
+    border-radius: 3px;
+    background: transparent;
+    padding: 7px 8px;
+    text-align: left;
+    font-size: 14px;
+    line-height: 1.4;
     cursor: pointer;
 }
 
-.customization-menu button:hover {
-    background-color: #312e2e;
+.sidebar-menu .sidebar-menu-danger {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 3px 3px;
 }
 
 .map-item-container {
@@ -268,7 +281,7 @@
     border: none;
     background: transparent;
     cursor: pointer;
-    font-size: 1.2 rem;
+    font-size: 1.2rem;
     color: #333;
     padding: 2px 6px;
     border-radius: 4px;
@@ -276,7 +289,9 @@
     pointer-events: none;
 }
 
-.submap-item:hover .submap-menu-button {
+.submap-item:hover .submap-menu-button,
+.submap-item:focus-within .submap-menu-button,
+.submap-menu-button[aria-expanded="true"] {
     opacity: 1;
     pointer-events: auto;
 }
@@ -285,20 +300,19 @@
     background-color: #e0e0e0;
 }
 
-.submap-customization-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    border: 1px solid rgb(107, 102, 102);
-    border-radius: 8px;
-    margin-left: 35px;
-    margin-bottom: 8px;
-    display: flex;
-    flex-direction: column;
-    width: 150px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 20;
-    padding: 1px;
+@media (hover: none), (pointer: coarse) {
+    .map-menu-button,
+    .submap-menu-button {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .map-sidebar,
+    .sidebar-content,
+    .map-menu-button,
+    .submap-menu-button { transition: none; }
 }
 
 .rename-popup {
@@ -366,7 +380,7 @@
 
 .add-map-button {
     flex-shrink: 0;
-    margin-bottom: 25px;
-    margin-top: 25px;
+    margin-bottom: 8px;
+    margin-top: 12px;
 }
 

@@ -174,9 +174,7 @@ button:disabled {
 :root .search-results,
 :root .search-results button,
 :root .add-pin-button,
-:root .maplibregl-popup-content,
-:root .customization-menu,
-:root .submap-customization-menu {
+:root .maplibregl-popup-content {
     background: var(--surface);
     color: var(--text);
     border-color: var(--border);
@@ -209,11 +207,6 @@ button:disabled {
     color: var(--muted);
 }
 
-:root .customization-menu button {
-    background: var(--control-bg);
-    color: var(--text);
-}
-
 :root .account-dropdown button:hover,
 :root .search-results button:hover,
 :root .pin-map-row:hover,
@@ -221,7 +214,6 @@ button:disabled {
 :root .submap-item:hover,
 :root .map-menu-button:hover,
 :root .submap-menu-button:hover,
-:root .customization-menu button:hover,
 :root .sidebar-toggle:hover {
     background: var(--hover-bg);
 }

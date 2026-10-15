@@ -1,11 +1,12 @@
 import './MapSidebar.css';
 import { useState } from 'react';
-import { useRef, useEffect } from 'react';
+import { useRef, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { DragDropProvider } from '@dnd-kit/react';
 import OrderableRow from './OrderableRow';
 import { moveWithinList } from '../mapOrdering';
 import CollaboratorsModal from './CollaboratorsModal';
+import SidebarMenu from './SidebarMenu';
 
 function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMap, leavingMapId, onReorder, orderStatus, onRetryOrder }) {
     
@@ -24,8 +25,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
     const [customizingSubmap, setCustomizingSubmap] = useState(null);
     const [renamingSubmap, setRenamingSubmap] = useState(null);
     const [deletingSubmap, setDeletingSubmap] = useState(null);
-    const menuRef = useRef(null);
-    const submapMenuRef = useRef(null);
+    const [menuAnchor, setMenuAnchor] = useState(null);
     const [changingColor, setChangingColor] = useState(null);
     const [newColor, setNewColor] = useState('#3388ff');
     const [sharingMap, setSharingMap] = useState(null);
@@ -35,23 +35,11 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
     const [viewingCollaborators, setViewingCollaborators] = useState(null);
     const collaboratorsReturnFocus = useRef(null);
     
-    // Closes the customization menu if the user clicks outside of it.
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (menuRef.current && !menuRef.current.contains(event.target)) {
-                setCustomizingMap(null);
-            }
-            if (submapMenuRef.current && !submapMenuRef.current.contains(event.target)) {
-                setCustomizingSubmap(null);
-            }
-        };
-
-        document.addEventListener("mousedown", handleClickOutside);
-
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, []);
+    const closeMenu = useCallback((restoreFocus = false) => {
+        setCustomizingMap(null);
+        setCustomizingSubmap(null);
+        if (restoreFocus) menuAnchor?.focus();
+    }, [menuAnchor]);
 
     // Toggles the visibility of a map by its ID and all its submaps.
     function toggleMap(id) {
@@ -163,9 +151,11 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
     return (
         <aside className={`map-sidebar ${isOpen ? 'open' : 'closed'}`}>
 
-            <button className="sidebar-toggle" onClick={() => setIsOpen(!isOpen)}>☰</button>
+            <button className="sidebar-toggle" aria-label={isOpen ? 'Collapse maps sidebar' : 'Open maps sidebar'}
+                aria-expanded={isOpen} aria-controls="sidebar-content"
+                onClick={() => { closeMenu(); setIsOpen(!isOpen); }}>☰</button>
             
-            <div className="sidebar-content">
+            <div id="sidebar-content" className="sidebar-content" inert={!isOpen}>
                 <header className="sidebar-header">
                     <h2>My Maps</h2>
                 </header>
@@ -220,6 +210,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                     <div className="checkbox-container">
                                         <input
                                             type="checkbox"
+                                            aria-label={`Show ${map.name}`}
                                             style={{ accentColor: map.color }}
                                             checked={map.visible}
 
@@ -236,9 +227,13 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                 {(!map.isDefault && canEdit || canLeave) && (
                                     <button 
                                     className="map-menu-button"
+                                    type="button" aria-label={`Actions for ${map.name}`} aria-haspopup="menu"
+                                    aria-expanded={customizingMap === map.id} aria-controls={customizingMap === map.id ? 'sidebar-actions-menu' : undefined}
                                     onClick={(event) => {
                                         //prevent the button click from also triggering the parent div onClick.
                                         event.stopPropagation();
+                                        setMenuAnchor(event.currentTarget);
+                                        setCustomizingSubmap(null);
                                         //toggles customization menu for the map.
                                         setCustomizingMap(customizingMap === map.id ? null : map.id);
                                     }}
@@ -260,6 +255,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                             onClick={() => toggleSubmap(map.id, submap.id)}>
                                             <input
                                                 type="checkbox"
+                                                aria-label={`Show ${submap.name}`}
                                                 style={{ accentColor: submap.color }}
                                                 checked={submap.visible}
                                                 onChange={() => toggleSubmap(map.id, submap.id)}
@@ -271,8 +267,12 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                             {canEdit && (
                                                 <button
                                                     className="submap-menu-button"
+                                                    type="button" aria-label={`Actions for ${submap.name}`} aria-haspopup="menu"
+                                                    aria-expanded={customizingSubmap === submap.id} aria-controls={customizingSubmap === submap.id ? 'sidebar-actions-menu' : undefined}
                                                     onClick={(event) => {
                                                         event.stopPropagation();
+                                                        setMenuAnchor(event.currentTarget);
+                                                        setCustomizingMap(null);
                                                         setCustomizingSubmap(
                                                             customizingSubmap === submap.id ? null : submap.id
                                                         )
@@ -283,12 +283,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                             )}
 
                                             {customizingSubmap === submap.id && (
-                                                <div 
-                                                ref={submapMenuRef} 
-                                                className="submap-customization-menu"
-                                                onClick={(event) => event.stopPropagation()}
-                                                >
-                                                    <button
+                                                <SidebarMenu anchor={menuAnchor} id="sidebar-actions-menu" label={`Actions for ${submap.name}`} onClose={closeMenu}>
+                                                    <button role="menuitem" tabIndex={-1}
                                                         onClick={(event) => {
                                                             event.stopPropagation();
                                                             setNewSubmapName(submap.name);
@@ -299,10 +295,10 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                             setCustomizingSubmap(null);
                                                         }}
                                                     >
-                                                        rename
+                                                        Rename
                                                     </button>
 
-                                                    <button 
+                                                    <button role="menuitem" tabIndex={-1}
                                                         onClick={(event) => {
                                                             event.stopPropagation();
                                                             setNewColor(submap.color);
@@ -310,13 +306,13 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                                 mapId: map.id,
                                                                 submapId: submap.id
                                                             });
-                                                            setCustomizingMap(null);
+                                                            setCustomizingSubmap(null);
                                                         }}
                                                     >
-                                                        change color
+                                                        Change color
                                                     </button>
 
-                                                    <button 
+                                                    <button role="menuitem" tabIndex={-1} className="sidebar-menu-danger"
                                                         onClick={(event) => {
                                                             event.stopPropagation();
                                                             
@@ -327,9 +323,9 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                             setCustomizingSubmap(null);
                                                         }}
                                                     >
-                                                        delete
+                                                        Delete
                                                     </button>
-                                                </div>
+                                                </SidebarMenu>
                                         )}
                                         
                                         {renamingSubmap &&
@@ -463,18 +459,18 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                             )}
 
                             {customizingMap === map.id && (
-                                <div ref={menuRef} className="customization-menu">
+                                <SidebarMenu anchor={menuAnchor} id="sidebar-actions-menu" label={`Actions for ${map.name}`} onClose={closeMenu}>
                                     {isOwner && (
                                         <>
-                                            <button onClick={(event) => {
+                                            <button role="menuitem" tabIndex={-1} onClick={(event) => {
                                                 event.stopPropagation();
                                                 setNewMapName(map.name);
                                                 setRenamingMap(map.id);
                                                 setCustomizingMap(null);
                                             }}>
-                                                rename
+                                                Rename
                                             </button>
-                                            <button onClick={(event) => {
+                                            <button role="menuitem" tabIndex={-1} onClick={(event) => {
                                                 event.stopPropagation();
                                                 setNewColor(map.color);
                                                 setChangingColor({
@@ -483,60 +479,59 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 });
                                                 setCustomizingMap(null);
                                             }}>
-                                                change color
+                                                Change color
                                             </button>
-                                            <button onClick={(event) => {
+                                            <button role="menuitem" tabIndex={-1} onClick={(event) => {
                                                 event.stopPropagation();
                                                 setSharingMap(map);
                                                 setCollaboratorEmail('');
                                                 setCollaboratorRole('viewer');
                                                 setCustomizingMap(null);
                                             }}>
-                                                invite collaborator
+                                                Invite collaborator
                                             </button>
                                        
                                     </>
                                     )}
-                                    <button onClick={(event) => {
+                                    <button role="menuitem" tabIndex={-1} onClick={(event) => {
                                         event.stopPropagation();
-                                        collaboratorsReturnFocus.current = event.currentTarget
-                                            .closest('.map-item-container').querySelector('.map-menu-button');
+                                        collaboratorsReturnFocus.current = menuAnchor;
                                         setViewingCollaborators(map);
                                         setCustomizingMap(null);
                                     }}>
-                                        view collaborators
+                                        View collaborators
                                     </button>
                                     {canEdit && (
-                                        <button onClick={(event) => {
+                                        <button role="menuitem" tabIndex={-1} onClick={(event) => {
                                             event.stopPropagation();
                                             setNewSubmapName('');
                                             setAddingSubmap(map.id);
                                             setCustomizingMap(null);
                                         }}>
-                                            add submap
+                                            Add submap
                                         </button>
                                     )}
                                     {isOwner && (
                                     <>
-                                        <button onClick={(event) => {
+                                        <button role="menuitem" tabIndex={-1} className="sidebar-menu-danger" onClick={(event) => {
                                             event.stopPropagation();
                                             setDeletingMap(map.id);
                                             setCustomizingMap(null);
                                         }}>
-                                            delete 
+                                            Delete
                                         </button>
                                     </>
                                 )}
                                     {canLeave && (
-                                        <button onClick={(event) => {
+                                        <button role="menuitem" tabIndex={-1} className="sidebar-menu-danger" onClick={(event) => {
                                             event.stopPropagation();
                                             setLeavingMap(map.id);
                                             setCustomizingMap(null);
                                         }}>
-                                            leave map
+                                            Leave map
                                         </button>
                                     )}
-                                </div>
+                                </SidebarMenu>
                             )}
 
                             {leavingMap === map.id && canLeave && (
