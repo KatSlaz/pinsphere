@@ -1,4 +1,4 @@
-import Map, { Marker, Popup } from '@vis.gl/react-maplibre';
+import Map, { AttributionControl, Marker, Popup } from '@vis.gl/react-maplibre';
 import { setWorkerUrl } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -12,6 +12,8 @@ import { supabase } from '../supabaseClient';
 import { MAP_STYLES } from '../mapStyles';
 import { applyPersonalOrder, pinColor } from '../mapOrdering';
 import { useMapOrdering } from '../useMapOrdering';
+import PlaceSearch from '../components/PlaceSearch';
+import { pinDraftFromPlace, searchContext } from '../placeSearch';
 
 const getMapSelectionId = (id) => `map:${id}`;
 const getSubmapSelectionId = (id) => `submap:${id}`;
@@ -29,9 +31,8 @@ function PinSphereMap({ mapStyle }) {
 
     const [addingPin, setAddingPin] = useState(false);
     const [newPin, setNewPin] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
     const mapRef = useRef(null);
-    const [searchResults, setSearchResults] = useState([]);
+    const [searchPreview, setSearchPreview] = useState(null);
     const [pinName, setPinName] = useState('');
     const [selectedMaps, setSelectedMaps] = useState([]);
     const [expandedPinMaps, setExpandedPinMaps] = useState([]);
@@ -54,6 +55,43 @@ function PinSphereMap({ mapStyle }) {
     const maps = useMemo(() => applyPersonalOrder(rawMaps, ordering.order), [rawMaps, ordering.order]);
     const [loadingMaps, setLoadingMaps] = useState(true);
     const pinLoadRef = useRef(0);
+
+    const openPinForm = (draft) => {
+        setAddingPin(false);
+        setSearchPreview(null);
+        setSelectedPin(null);
+        setEditingPin(null);
+        setNewPin({ longitude: draft.longitude, latitude: draft.latitude });
+        setPinName(draft.name || '');
+        setPinNotes('');
+        setSelectedMaps([]);
+        setExpandedPinMaps([]);
+    };
+
+    const startManualPlacement = () => {
+        setSearchPreview(null);
+        setSelectedPin(null);
+        setAddingPin(true);
+    };
+
+    const previewPlace = (place) => {
+        const narrowScreen = window.innerWidth <= 700;
+        if (narrowScreen) setSidebarOpen(false);
+        setAddingPin(false);
+        setSelectedPin(null);
+        setSearchPreview(place);
+        const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 800;
+        if (place.bounds) {
+            const [west, south, east, north] = place.bounds;
+            mapRef.current?.fitBounds([[west, south], [east, north]], {
+                padding: { top: 130, bottom: 100, left: sidebarOpen && window.innerWidth > 700 ? 270 : 60, right: 40 },
+                maxZoom: place.isArea ? 13 : 17, duration, retainPadding: false,
+            });
+        } else {
+            mapRef.current?.flyTo({ center: [place.longitude, place.latitude], zoom: place.isArea ? 10 : 16,
+                offset: [sidebarOpen && !narrowScreen ? 125 : 0, 40], duration, retainPadding: false });
+        }
+    };
 
     const loadPins = useCallback(async (accessMaps) => {
         const requestId = ++pinLoadRef.current;
@@ -701,86 +739,14 @@ function PinSphereMap({ mapStyle }) {
                 />
 
                 <div className="map-wrapper">
-                    {addingPin && (
-                        <div className="pin-search">
-                            <input
-                                type="text"
-                                placeholder="Search for a place..."
-                                value={searchQuery}
-                                onChange={(event) => setSearchQuery(event.target.value)}
-                            />
-                            <button
-                                onClick={async () => {
-                                if (!searchQuery.trim()) return;
-
-                                const response = await fetch(
-                                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`
-                                );
-
-                                const results = await response.json();
-
-                                setSearchResults(results);
-                            }}
-                            >
-                                Search
-                            </button>
-
-                            {searchResults.length > 0 && (
-                                <div className="search-results">
-                                    {searchResults.slice(0, 5).map((result) => (
-                                        <button
-                                            key={result.place_id}
-                                            onClick={() => {
-                                                const south = parseFloat(result.boundingbox[0]);
-                                                const north = parseFloat(result.boundingbox[1]);
-                                                const west = parseFloat(result.boundingbox[2]);
-                                                const east = parseFloat(result.boundingbox[3]);
-
-                                                const latitudeSpan = Math.abs(north - south);
-                                                const longitudeSpan = Math.abs(east - west);
-
-                                                const largestSpan = Math.max(latitudeSpan, longitudeSpan);
-
-                                                let zoomLevel;
-
-                                                if (largestSpan > 30) {
-                                                    zoomLevel = 3;
-                                                } else if (largestSpan > 10) {
-                                                    zoomLevel = 5;
-                                                } else if (largestSpan > 3) {
-                                                    zoomLevel = 7;
-                                                } else if (largestSpan > 1) {
-                                                    zoomLevel = 9;
-                                                } else if (largestSpan > 0.2) {
-                                                    zoomLevel = 12;
-                                                } else if (largestSpan > 0.05) {
-                                                    zoomLevel = 14;
-                                                } else {
-                                                    zoomLevel = 17;
-                                                }
-
-                                                mapRef.current?.flyTo({
-                                                    center: [
-                                                        parseFloat(result.lon),
-                                                        parseFloat(result.lat)
-                                                    ],
-                                                    zoom: zoomLevel,
-                                                    duration: 1500
-                                                });
-
-                                                setSearchResults([]);
-                                            }}
-                                        >
-                                            {result.display_name}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    
+                    <PlaceSearch sidebarOpen={sidebarOpen}
+                        getContext={() => searchContext(mapRef.current)}
+                        onSelect={previewPlace}
+                        onManual={startManualPlacement} />
+                    {addingPin && <p className="manual-pin-hint" role="status">Click the map to place your pin, or cancel manual placement.</p>}
                     {/* Main map component that displays the map using MapLibre GL. */}
                     <Map ref={mapRef} className="map-container"
+                        attributionControl={false}
                         initialViewState={{
                             longitude: -30,
                             latitude: 30,
@@ -793,15 +759,31 @@ function PinSphereMap({ mapStyle }) {
                         mapStyle={MAP_STYLES.find(style => style.id === mapStyle)?.url || MAP_STYLES[0].url}
                         onClick={(event) => {
                             if (!addingPin) return;
-                            setNewPin({
+                            openPinForm({
                                 longitude: event.lngLat.lng,
                                 latitude: event.lngLat.lat
                             });
-                            setAddingPin(false);
-                            setPinName('');
-                            setSelectedMaps([]);
                         }}
                     >
+                        <AttributionControl position="bottom-right" customAttribution={[
+                            '<a href="https://maplibre.org/" target="_blank">MapLibre</a>',
+                            'Powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a>',
+                        ]} />
+                        {searchPreview && <>
+                            <Marker longitude={searchPreview.longitude} latitude={searchPreview.latitude} />
+                            <Popup longitude={searchPreview.longitude} latitude={searchPreview.latitude}
+                                anchor="bottom" maxWidth="300px" onClose={() => setSearchPreview(null)} closeOnClick={false}>
+                                <div className="search-preview">
+                                    <strong>{searchPreview.name}</strong>
+                                    <p>{searchPreview.address}</p>
+                                    {searchPreview.isArea && <p>This is an area, not an exact venue. The marker shows a representative point.</p>}
+                                    <button onClick={() => openPinForm(pinDraftFromPlace(searchPreview))}>
+                                        {searchPreview.isArea ? 'Add Pin at this point' : 'Add Pin'}
+                                    </button>
+                                    {searchPreview.isArea && <button onClick={startManualPlacement}>Choose an exact point</button>}
+                                </div>
+                            </Popup>
+                        </>}
                         {newPin && (
                             <Marker
                                 longitude={newPin.longitude}
@@ -823,6 +805,7 @@ function PinSphereMap({ mapStyle }) {
                                     title={pin.name}
                                     onClick={(event) => {
                                         event.stopPropagation();
+                                        setSearchPreview(null);
                                         setSelectedPin(pin);
                                     }}
                                 />
@@ -1335,11 +1318,11 @@ function PinSphereMap({ mapStyle }) {
                     <button 
                         className="add-pin-button" 
                         onClick={() => {
-                            setAddingPin(!addingPin)
-                            setNewPin(null);
+                            if (addingPin) setAddingPin(false);
+                            else startManualPlacement();
                         }}
                     >
-                        {addingPin ? 'Cancel Add Pin' : '+ Add Pin'}
+                        {addingPin ? 'Cancel manual placement' : '+ Place Pin Manually'}
                     </button>
                 </div>
             </div>

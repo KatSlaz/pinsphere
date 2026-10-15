@@ -23,6 +23,20 @@ html, body, #root {
     height: 100%;
 }
 
+/* Keep the attribution toggle/links above sidebar and map action overlays. */
+.map-wrapper .maplibregl-ctrl-bottom-right {
+    z-index: 11;
+}
+
+.map-wrapper .maplibregl-ctrl-attrib {
+    background: var(--surface, white);
+    color: var(--text);
+}
+
+.map-wrapper .maplibregl-ctrl-attrib a {
+    color: inherit;
+}
+
 .add-pin-button {
     position: absolute;
     bottom: 40px;
