@@ -57,10 +57,6 @@ export default function useInvitations(userId, open) {
 
   const act = async (kind, invitation) => {
     if (actionRunning.current || !userId) return
-    const pending = invitationStatus(invitation) === 'pending'
-    if (kind === 'remove' && pending && !window.confirm(
-      `Cancel the invitation to ${invitation.invitee_email}? They will no longer be able to accept it unless acceptance has already completed.`
-    )) return
     actionRunning.current = true
     generation.current.value++
     setBusy({ kind, id: invitation.id })

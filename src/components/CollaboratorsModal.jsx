@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import Dialog, { ConfirmDialog } from './Dialog'
 import { supabase } from '../supabaseClient'
 import { createCollaboratorManager, loadCollaborators } from '../collaborators'
 import './CollaboratorsModal.css'
@@ -13,16 +13,8 @@ export default function CollaboratorsModal({ map, currentUserId, onClose, return
   const [result, setResult] = useState({ status: 'loading', members: [] })
   const [memberStates, setMemberStates] = useState({})
   const managerRef = useRef(null)
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    const returnFocus = returnFocusRef.current
-    dialog.showModal()
-    return () => {
-      dialog.close()
-      returnFocus?.focus()
-    }
-  }, [returnFocusRef])
+  const [removingMember, setRemovingMember] = useState(null)
+  const [confirmingRemoval, setConfirmingRemoval] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -59,12 +51,11 @@ export default function CollaboratorsModal({ map, currentUserId, onClose, return
   }
   const manage = (member, role) => {
     if (!isOwner || member.role === 'owner' || member.user_id === currentUserId) return
-    if (role === null && !window.confirm(`Remove ${member.email || 'this collaborator'} from this map? They will lose access to the map.`)) return
+    if (role === null) { setRemovingMember(member); return }
     void managerRef.current?.run(member, role)
   }
-  return createPortal(
-    <dialog ref={dialogRef} className="collaborators-dialog" aria-labelledby={headingId}
-      onCancel={event => { event.preventDefault(); onClose() }}>
+  return <Dialog label={`Collaborators — ${map.name}`} onClose={onClose} returnFocusRef={returnFocusRef}>
+    <div ref={dialogRef} className="collaborators-dialog" aria-labelledby={headingId}>
       <div className="collaborators-header">
         <h3 id={headingId}>Collaborators — {map.name}</h3>
         <button type="button" onClick={onClose} aria-label="Close collaborators">Close</button>
@@ -108,6 +99,15 @@ export default function CollaboratorsModal({ map, currentUserId, onClose, return
           .map(([id, state]) => <p key={id} role={state.refreshFailed ? 'alert' : 'status'}>{state.message}</p>)}
         {needsRefresh && <button type="button" disabled={anyBusy} onClick={retry}>Refresh collaborators</button>}
       </div>
-    </dialog>, document.body,
-  )
+    </div>
+    {removingMember && <ConfirmDialog title="Remove collaborator?"
+      message={`Remove ${removingMember.email || 'this collaborator'} from this map? They will lose access to the map.`}
+      confirmLabel="Remove" busy={confirmingRemoval} onClose={() => setRemovingMember(null)}
+      onConfirm={async () => {
+        if (confirmingRemoval) return
+        setConfirmingRemoval(true)
+        try { await managerRef.current?.run(removingMember, null); setRemovingMember(null) }
+        finally { setConfirmingRemoval(false) }
+      }} />}
+  </Dialog>
 }

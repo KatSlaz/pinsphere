@@ -4,6 +4,8 @@ import { supabase } from '../supabaseClient';
 import { useEffect, useState } from 'react';
 import useInvitations from '../useInvitations';
 import { invitationStatus } from '../invitations';
+import Dialog, { ConfirmDialog } from './Dialog';
+import { useDialogAction } from '../useDialogAction';
 
 const roleLabel = role => ({ viewer: 'Viewer', editor: 'Editor' }[role] || 'Unknown');
 const statusLabel = status => ({ pending: 'Pending', accepted: 'Accepted', declined: 'Declined', expired: 'Expired' }[status] || 'Unknown');
@@ -14,6 +16,8 @@ function Navbar() {
     const [accountOpen, setAccountOpen] = useState(false);
     const [showInvitations, setShowInvitations] = useState(false);
     const invitations = useInvitations(user?.id, showInvitations);
+    const logout = useDialogAction();
+    const [cancellingInvitation, setCancellingInvitation] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -23,10 +27,10 @@ function Navbar() {
         return () => { cancelled = true; };
     }, []);
 
-    const handleLogout = async () => {
+    const handleLogout = logout.run(async () => {
         const { error } = await supabase.auth.signOut();
-        if (error) alert(error.message);
-    };
+        if (error) logout.setError(error.message || 'Could not log out. Please try again.');
+    });
 
     return (
         <nav className="navbar">
@@ -41,9 +45,10 @@ function Navbar() {
                             Invitations{invitations.received.length > 0 && ` (${invitations.received.length})`}
                         </button>
                         <button onClick={() => { setAccountOpen(false); navigate('/settings'); }}>Settings</button>
-                        <button onClick={handleLogout}>Log Out</button>
+                        <button disabled={logout.busy} onClick={handleLogout}>{logout.busy ? 'Logging out…' : 'Log Out'}</button>
+                        {logout.error && <p className="account-error" role="alert">{logout.error}</p>}
                     </div>
-                    {showInvitations && <div className="invitations-overlay" onClick={() => setShowInvitations(false)}>
+                    {showInvitations && <Dialog label="Invitations" onClose={() => setShowInvitations(false)} busy={Boolean(invitations.busy)} dismissOnBackdrop>
                         <div className="invitations-popup" onClick={event => event.stopPropagation()}>
                             <div className="invitations-header">
                                 <h3>Invitations</h3>
@@ -97,14 +102,19 @@ function Navbar() {
                                             </div>
                                             <button className="sent-invitation-remove" disabled={Boolean(invitations.busy)}
                                                 title={label} aria-label={`${label} to ${invitation.invitee_email}`}
-                                                onClick={() => invitations.act('remove', invitation)}>
+                                                onClick={() => status === 'pending' ? setCancellingInvitation(invitation) : invitations.act('remove', invitation)}>
                                                 {invitations.busy?.id === invitation.id && invitations.busy.kind === 'remove' ? '…' : '×'}
                                             </button>
                                         </div>;
                                     })}
                             </div>
                         </div>
-                    </div>}
+                        {cancellingInvitation && <ConfirmDialog title="Cancel invitation?"
+                            message={`Cancel the invitation to ${cancellingInvitation.invitee_email}? They will no longer be able to accept it unless acceptance has already completed.`}
+                            confirmLabel="Cancel invitation" busy={Boolean(invitations.busy)}
+                            onClose={() => setCancellingInvitation(null)}
+                            onConfirm={async () => { await invitations.act('remove', cancellingInvitation); setCancellingInvitation(null); }} />}
+                    </Dialog>}
                 </>}
             </div>
         </nav>

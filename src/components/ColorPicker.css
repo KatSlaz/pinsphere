@@ -1,0 +1,11 @@
+.color-picker { margin: 16px 0; }
+.color-current { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.color-current strong { display: block; }
+.color-preview { width: 30px; height: 30px; border-radius: 5px; border: 1px solid var(--border); flex-shrink: 0; }
+.color-presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 16px 0; }
+.app-dialog .color-swatch { position: relative; padding: 3px; background: transparent; border: 1px solid transparent; }
+.color-swatch > span:first-child { display: block; height: 28px; border-radius: 4px; }
+.app-dialog .color-swatch[aria-pressed="true"] { border-color: var(--text); }
+.color-check { position: absolute; inset: 5px auto auto 5px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); color: var(--text); font-size: 13px; }
+.color-picker label { display: block; font-size: 13px; margin-bottom: 6px; }
+.color-picker input { margin-bottom: 0; }

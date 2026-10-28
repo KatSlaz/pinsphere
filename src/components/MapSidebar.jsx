@@ -1,3 +1,7 @@
+import Dialog from './Dialog';
+import ColorPicker from './ColorPicker';
+import { useDialogAction } from '../useDialogAction';
+import { normalizeHex } from '../colors';
 import './MapSidebar.css';
 import { useState } from 'react';
 import { useRef, useCallback } from 'react';
@@ -10,6 +14,8 @@ import SidebarMenu from './SidebarMenu';
 
 function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMap, leavingMapId, onReorder, orderStatus, onRetryOrder }) {
     
+    const action = useDialogAction();
+    const [notice, setNotice] = useState('');
     // Keeps track of which map is currently being customized with null meaning no map is being customized.
     const [customizingMap, setCustomizingMap] = useState(null);
 
@@ -156,6 +162,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                 onClick={() => { closeMenu(); setIsOpen(!isOpen); }}>☰</button>
             
             <div id="sidebar-content" className="sidebar-content" inert={!isOpen}>
+                {notice && <p className="order-status" role="status">{notice}</p>}
                 <header className="sidebar-header">
                     <h2>My Maps</h2>
                 </header>
@@ -331,7 +338,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                         {renamingSubmap &&
                                 renamingSubmap.mapId === map.id &&
                                 renamingSubmap.submapId === submap.id && (
-                                    <div className="rename-overlay">
+                                    <Dialog label="Rename Submap" onClose={() => setRenamingSubmap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                         <div 
                                         className="rename-popup"
                                         onClick={(event) => event.stopPropagation()}
@@ -356,10 +363,10 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 </button>
 
                                                 <button
-                                                    onClick={async (event) => {
+                                                    onClick={event => action.run(async (event) => {
                                                         event.stopPropagation();
 
-                                                        if (newSubmapName.trim() === '') return;
+                                                        if (newSubmapName.trim() === '') { action.setError('Please enter a name.'); return; }
 
                                                         const updatedName = newSubmapName.trim();
 
@@ -370,6 +377,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                         if (error) {
                                                             console.error('Error renaming submap:', error);
+                                                            action.setError('Could not rename this submap. Please try again.');
                                                             return;
                                                         }
 
@@ -388,21 +396,21 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                         setRenamingSubmap(null);
                                                         setNewSubmapName('');
-                                                    }}
+                                                    })(event)}
                                                 >
                                                     Save
                                                 </button>
                                             </div>                                     
                                         </div>
 
-                                    </div>
+                                    </Dialog>
                                 )
                             }
 
                             {deletingSubmap &&
                                 deletingSubmap.mapId === map.id &&
                                 deletingSubmap.submapId === submap.id && (
-                                    <div className="rename-overlay">
+                                    <Dialog label="Delete Submap?" onClose={() => setDeletingSubmap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                         <div 
                                             className="delete-popup"
                                             onClick={(event) => event.stopPropagation()}
@@ -418,7 +426,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 </button>
 
                                                 <button
-                                                    onClick={async () => {
+                                                    onClick={event => action.run(async () => {
                                                         const { error } = await supabase
                                                             .from('submaps')
                                                             .delete()
@@ -426,6 +434,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                         if (error) {
                                                             console.error('Error deleting submap:', error);
+                                                            action.setError('Could not delete this submap. Please try again.');
                                                             return;
                                                         }
 
@@ -444,13 +453,13 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                         );
 
                                                         setDeletingSubmap(null);
-                                                    }}
+                                                    })(event)}
                                                 >
                                                     Delete
                                                 </button>    
                                             </div>
                                         </div>
-                                    </div>     
+                                    </Dialog>
                                 )                                     
                             }
                             </OrderableRow>
@@ -535,7 +544,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                             )}
 
                             {leavingMap === map.id && canLeave && (
-                                <div className="rename-overlay">
+                                <Dialog label="Leave Map?" onClose={() => setLeavingMap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                     <div className="delete-popup" onClick={(event) => event.stopPropagation()}>
                                         <h3>Leave Map?</h3>
                                         <p>Leave "{map.name}"? You will lose access. The map and its contents will remain for everyone else.</p>
@@ -543,7 +552,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                             <button disabled={leavingMapId !== null} onClick={() => setLeavingMap(null)}>
                                                 Cancel
                                             </button>
-                                            <button disabled={leavingMapId !== null} onClick={async () => {
+                                            <button disabled={leavingMapId !== null} onClick={event => action.run(async () => {
                                                 const success = await onLeaveMap(map.id);
                                                 if (!success) return;
 
@@ -554,44 +563,42 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 setChangingColor(null);
                                                 setAddingSubmap(null);
                                                 setLeavingMap(null);
-                                            }}>
+                                            })(event)}>
                                                 {leavingMapId === map.id ? 'Leaving...' : 'Leave Map'}
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </Dialog>
                             )}
 
                             {/*shows the change color popup for the matching map id.*/}
                             {changingColor &&
                             changingColor.mapId === map.id && (
-                                <div className="rename-overlay">
+                                <Dialog label="Change Color" onClose={() => setChangingColor(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                     <div 
                                         className="rename-popup"
                                         onClick={(event) => event.stopPropagation()}
                                     >
                                         <h3>Change Color</h3>
 
-                                        <input
-                                            type="color"
-                                            value={newColor}
-                                            onChange={(event) => setNewColor(event.target.value)}
-                                        />
+                                        <ColorPicker value={newColor} onChange={setNewColor} />
 
                                         <div className="rename-buttons">
                                             <button onClick={() => setChangingColor(null)}>
                                                 Cancel
                                             </button>
 
-                                            <button onClick={async () => {
+                                            <button disabled={!normalizeHex(newColor)} onClick={event => action.run(async () => {
+                                                if (!normalizeHex(newColor)) return;
                                                 if (changingColor.submapId !== null) {
                                                     const { error } = await supabase
                                                         .from('submaps')
-                                                        .update({ color: newColor })
+                                                        .update({ color: normalizeHex(newColor) })
                                                         .eq('id', changingColor.submapId);
 
                                                     if (error) {
                                                         console.error('Error changing submap color:', error);
+                                                        action.setError('Could not save this color. Please try again.');
                                                         return;
                                                     }
 
@@ -602,7 +609,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                                     ...map,
                                                                     submaps: map.submaps.map(submap =>
                                                                         submap.id === changingColor.submapId
-                                                                            ? { ...submap, color: newColor }
+                                                                            ? { ...submap, color: normalizeHex(newColor) }
                                                                             : submap
                                                                     )
                                                                 }
@@ -612,35 +619,36 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 } else {
                                                     const { error } = await supabase
                                                         .from('maps')
-                                                        .update({ color: newColor })
+                                                        .update({ color: normalizeHex(newColor) })
                                                         .eq('id', changingColor.mapId);
 
                                                     if (error) {
                                                         console.error('Error changing map color:', error);
+                                                        action.setError('Could not save this color. Please try again.');
                                                         return;
                                                     }
 
                                                     setMaps(prevMaps =>
                                                         prevMaps.map(map =>
                                                             map.id === changingColor.mapId
-                                                                ? { ...map, color: newColor }
+                                                                ? { ...map, color: normalizeHex(newColor) }
                                                                 : map
                                                         )
                                                     );
                                                 }
 
                                                 setChangingColor(null);
-                                            }}>
+                                            })(event)}>
                                                 Save
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </Dialog>
                             )}
 
                             {/*shows the rename popup for the matching map id.*/}
                             {renamingMap === map.id && (
-                                <div className="rename-overlay">
+                                <Dialog label="Rename Map" onClose={() => setRenamingMap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                     <div className="rename-popup">
                                         <h3>Rename Map</h3>
                                         <input 
@@ -653,8 +661,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                             <button onClick={() => setRenamingMap(null)}>
                                                 Cancel
                                             </button>
-                                            <button onClick={async () => {
-                                                if (newMapName.trim() === '') return;
+                                            <button onClick={event => action.run(async () => {
+                                                if (newMapName.trim() === '') { action.setError('Please enter a name.'); return; }
 
                                                 const updatedName = newMapName.trim();
 
@@ -665,6 +673,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                 if (error) {
                                                     console.error('Error renaming map:', error);
+                                                    action.setError('Could not rename this map. Please try again.');
                                                     return;
                                                 }
 
@@ -677,17 +686,17 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 );
 
                                                 setRenamingMap(null);
-                                            }}>
+                                            })(event)}>
                                                 Save
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </Dialog>
                             )}
 
                             {/*Shows the delete popup for the matching map id.*/}
                             {deletingMap === map.id && (
-                                <div className="rename-overlay">
+                                <Dialog label="Delete Map?" onClose={() => setDeletingMap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                     <div className="delete-popup">
                                         <h3>Delete Map?</h3>
                                         <p>Are you sure you want to delete "{map.name}"?</p>
@@ -697,7 +706,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 Cancel
                                             </button>
 
-                                            <button onClick={async () => {
+                                            <button onClick={event => action.run(async () => {
                                                 const { error } = await supabase
                                                     .from('maps')
                                                     .delete()
@@ -705,6 +714,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                 if (error) {
                                                     console.error('Error deleting map:', error);
+                                                    action.setError('Could not delete this map. Please try again.');
                                                     return;
                                                 }
 
@@ -713,17 +723,17 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 );
 
                                                 setDeletingMap(null);
-                                            }}>
+                                            })(event)}>
                                                 Delete
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </Dialog>
                             )}
 
                             {/*Shows the sharing map popup to add to the matching map id.*/}
                             {sharingMap && sharingMap.id === map.id && (
-                                <div className="rename-overlay">
+                                <Dialog label="Invite Collaborator" onClose={() => setSharingMap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                     <div
                                         className="rename-popup"
                                         onClick={(event) => event.stopPropagation()}
@@ -761,10 +771,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                             </button>
 
                                             <button
-                                                onClick={async () => {
-                                                    if (collaboratorEmail.trim() === '') {
-                                                        return;
-                                                    }
+                                                onClick={event => action.run(async () => {
+                                                    if (collaboratorEmail.trim() === '') { action.setError('Please enter an email address.'); return; }
 
                                                     const { error } = await supabase.rpc(
                                                         'invite_map_collaborator',
@@ -780,27 +788,27 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                             'Error inviting collaborator:',
                                                             JSON.stringify(error, null, 2)
                                                         );
-                                                        alert(error.message);
+                                                        action.setError(error.message || 'Could not send this invitation. Please try again.');
                                                         return;
                                                     }
 
-                                                    alert('Invitation sent successfully.');
+                                                    setNotice('Invitation sent.');
 
                                                     setSharingMap(null);
                                                     setCollaboratorEmail('');
                                                     setCollaboratorRole('viewer');
-                                                }}
+                                                })(event)}
                                             >
                                                 Invite
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </Dialog>
                             )}
 
                             {/*Shows the adding submap popup to add to the matching map id.*/}
                             {addingSubmap === map.id && (
-                                <div className="rename-overlay">
+                                <Dialog label="Add Submap" onClose={() => setAddingSubmap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                     <div 
                                         className="rename-popup"
                                         onClick={(event) => event.stopPropagation()}
@@ -819,8 +827,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                     Cancel
                                             </button>
                                             <button
-                                                onClick={async () => {
-                                                    if (newSubmapName.trim() === '') return;
+                                                onClick={event => action.run(async () => {
+                                                    if (newSubmapName.trim() === '') { action.setError('Please enter a name.'); return; }
 
                                                     const updatedName = newSubmapName.trim();
 
@@ -834,6 +842,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                     if (orderError) {
                                                         console.error('Error finding submap order:', orderError);
+                                                        action.setError('Could not prepare the new submap. Please try again.');
                                                         return;
                                                     }
 
@@ -854,6 +863,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                     if (error) {
                                                         console.error('Error creating submap:', error);
+                                                        action.setError('Could not create this submap. Please try again.');
                                                         return;
                                                     }
 
@@ -879,13 +889,13 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                                     setAddingSubmap(null);
                                                     setNewSubmapName('');
-                                                }}
+                                                })(event)}
                                             >
                                                 Create
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </Dialog>
                             )}
                         </div>
                         );    
@@ -904,7 +914,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                 </button>
 
                 {addingMap && (
-                    <div className="rename-overlay">
+                    <Dialog label="Add Map" onClose={() => setAddingMap(false)} busy={action.busy} error={action.error} onOpen={action.clear}>
                         <div className="rename-popup">
                             <h3>Add Map</h3>
 
@@ -920,8 +930,8 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                 <button onClick={() => setAddingMap(false)}
                                 > Cancel</button>
                                 
-                                <button onClick={async () => {
-                                    if (newMapName.trim() === '') return;
+                                <button onClick={event => action.run(async () => {
+                                    if (newMapName.trim() === '') { action.setError('Please enter a name.'); return; }
 
                                     const updatedName = newMapName.trim();
 
@@ -934,6 +944,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                     if (orderError) {
                                         console.error('Error finding map order:', orderError);
+                                        action.setError('Could not prepare the new map. Please try again.');
                                         return;
                                     }
 
@@ -955,6 +966,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                     if (error) {
                                         console.error('Error creating map:', error);
+                                        action.setError('Could not create this map. Please try again.');
                                         return;
                                     }
 
@@ -974,12 +986,12 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
 
                                     setAddingMap(false);
                                     setNewMapName('');
-                                }}>
+                                })(event)}>
                                     Create
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </Dialog>
                 )}
 
             </div>
