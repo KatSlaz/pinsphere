@@ -581,7 +581,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                     >
                                         <h3>Change Color</h3>
 
-                                        <ColorPicker value={newColor} onChange={setNewColor} />
+                                        <ColorPicker value={newColor} onChange={setNewColor} disabled={action.busy} />
 
                                         <div className="rename-buttons">
                                             <button onClick={() => setChangingColor(null)}>
