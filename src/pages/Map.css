@@ -213,3 +213,6 @@ html, body, #root {
     font-size: 13px;
     color: #555;
 }
+
+.pin-recovery { margin: 12px 0; font-size: 13px; line-height: 1.5; }
+.pin-recovery button { margin-top: 8px; }

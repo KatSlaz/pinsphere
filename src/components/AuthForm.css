@@ -11,8 +11,8 @@
 .auth-field-error, .auth-error { font-size: 13px; line-height: 1.5; margin: 6px 0 0; overflow-wrap: anywhere; }
 .auth-error { margin-bottom: 14px; }
 .auth-error:focus, .auth-confirmation:focus { outline: none; }
-.auth-submit { display: block; width: 100%; padding: 10px 12px; border: none; border-radius: 5px; background: #3388ff; color: white; font-size: 14px; line-height: 1.5; cursor: pointer; }
-:root .auth-submit { --button-hover-bg: #2675df; --button-active-bg: #1e63c2; }
+.auth-submit { display: block; width: 100%; padding: 10px 12px; border: none; border-radius: 5px; background: #246bd0; color: white; font-size: 14px; line-height: 1.5; cursor: pointer; }
+:root .auth-submit { --button-hover-bg: #1e5db8; --button-active-bg: #184e9d; }
 .auth-alternative { margin: 20px 0 0; font-size: 14px; line-height: 1.5; }
 .auth-confirmation { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .auth-confirmation p + p { margin-top: 20px; }

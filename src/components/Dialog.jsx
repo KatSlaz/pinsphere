@@ -5,7 +5,7 @@ import './Dialog.css'
 
 let bodyOverflow = ''
 
-export default function Dialog({ label, onClose, busy = false, error, onOpen, returnFocusRef, children, className = '', dismissOnBackdrop = false }) {
+export default function Dialog({ label, onClose, busy = false, busyLabel = 'Saving…', error, onOpen, returnFocusRef, children, className = '', dismissOnBackdrop = false }) {
   const ref = useRef(null)
   const lastFocus = useRef(null)
   useLayoutEffect(() => {
@@ -64,7 +64,7 @@ export default function Dialog({ label, onClose, busy = false, error, onOpen, re
     }}>
     <fieldset className="dialog-body" disabled={busy}>{children}</fieldset>
     {error && <p className="dialog-error" role="alert">{error}</p>}
-    {busy && <p className="dialog-status" role="status">Saving…</p>}
+    {busy && <p className="dialog-status" role="status">{busyLabel}</p>}
   </dialog>, document.body)
 }
 

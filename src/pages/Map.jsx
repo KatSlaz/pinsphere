@@ -3,7 +3,7 @@ import PinPopupContent from '../components/PinPopupContent';
 import PinFormFields from '../components/PinFormFields';
 import { dialogStack } from '../dialogs';
 import { useDialogAction } from '../useDialogAction';
-import { isRejectedPinWrite, confirmedPinRollback } from '../pinSaveSafety';
+import { isRejectedPinWrite, confirmedPinRollback, createPinRecovery } from '../pinSaveSafety';
 import Map, { AttributionControl, Marker, Popup } from '@vis.gl/react-maplibre';
 import { setWorkerUrl } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -33,13 +33,16 @@ function PinSphereMap({ mapStyle }) {
 
     
     const [pinNeedsReload, setPinNeedsReload] = useState(false);
+    const [pinRecovery] = useState(createPinRecovery);
+    const [recoveringPin, setRecoveringPin] = useState(false);
+    const [recoveryMessage, setRecoveryMessage] = useState('');
     const [unconfirmedCreation, setUnconfirmedCreation] = useState(false);
     const pinWriteStarted = useRef(false);
     const pinAction = useDialogAction({ onError: () => {
         if (pinWriteStarted.current) {
-            setPinNeedsReload(true);
-            if (!editingPin) setUnconfirmedCreation(true);
-            return 'The save could not be confirmed. Some changes may already be saved. Your entries are kept; close and reopen the pin to check before retrying.';
+            lockPinSave();
+
+            return editingPin ? 'The save could not be confirmed. Some changes may already be saved. Your draft is kept; use Check saved pin before retrying.' : 'Pin creation could not be confirmed. Your draft is kept; refresh and check All Places before adding it again.';
         }
     } });
     const [pinErrors, setPinErrors] = useState({});
@@ -96,17 +99,58 @@ function PinSphereMap({ mapStyle }) {
     const [loadingMaps, setLoadingMaps] = useState(true);
     const pinLoadRef = useRef(0);
 
+    const currentPinDraft = () => ({ name: pinName, notes: pinNotes, maps: [...selectedMaps], location: newPin });
+    const lockPinSave = () => {
+        setPinNeedsReload(true);
+        if (editingPin) pinRecovery.lock(editingPin, currentPinDraft());
+        else {
+            pinRecovery.lockCreation(currentPinDraft());
+            setUnconfirmedCreation(true);
+        }
+    };
+    const closePinForm = () => {
+        if (editingPin) pinRecovery.keepDraft(editingPin.id, currentPinDraft());
+        else if (unconfirmedCreation) pinRecovery.lockCreation(currentPinDraft());
+        setNewPin(null);
+        setEditingPin(null);
+    };
+    const recoverPin = async () => {
+        if (!editingPin || recoveringPin || pinAction.busy) return;
+        pinRecovery.keepDraft(editingPin.id, currentPinDraft());
+        setRecoveringPin(true);
+        pinAction.clear();
+        try {
+            const { pin, draft } = await pinRecovery.recover(supabase, editingPin.id);
+            if (!canEditPin(pin)) {
+                pinRecovery.lock(pin, draft);
+                throw new Error('This pin is no longer editable with your current map access. Your draft is kept.');
+            }
+            setPins(items => items.map(item => item.id === pin.id ? pin : item));
+            setEditingPin(pin);
+            setPinName(draft.name);
+            setPinNotes(draft.notes);
+            setSelectedMaps(draft.maps);
+            setPinNeedsReload(false);
+            setRecoveryMessage('Saved pin and connections verified. Your draft is kept; review it before saving.');
+        } catch (error) {
+            setRecoveryMessage(error.message || 'Could not verify the saved pin. Your draft is kept; reconnect and try again.');
+        } finally { setRecoveringPin(false); }
+    };
+
     const openPinForm = (draft) => {
+        const held = pinRecovery.getCreation();
+        if (held) draft = { ...held.location, name: held.name };
         setPinErrors({});
-        setPinNeedsReload(unconfirmedCreation);
+        setRecoveryMessage('');
+        setPinNeedsReload(Boolean(held) || unconfirmedCreation);
         setAddingPin(false);
         setSearchPreview(null);
         setSelectedPin(null);
         setEditingPin(null);
         setNewPin({ longitude: draft.longitude, latitude: draft.latitude });
         setPinName(draft.name || '');
-        setPinNotes('');
-        setSelectedMaps([]);
+        setPinNotes(held?.notes || '');
+        setSelectedMaps(held?.maps || []);
         setExpandedPinMaps([]);
     };
 
@@ -885,20 +929,22 @@ function PinSphereMap({ mapStyle }) {
                                 <PinPopupContent pin={selectedPin} maps={maps} editable={canEditPin(selectedPin)} userId={currentUserId}
                                     onClose={closePinPopup} onDelete={() => { pinFormReturnRef.current = pinTriggerRef.current; openDeletePin(selectedPin); }} onEdit={() => {
                                         pinFormReturnRef.current = pinTriggerRef.current;
+                                        const held = pinRecovery.get(selectedPin.id);
                                         setEditingPin(selectedPin);
-                                        setPinNeedsReload(false);
+                                        setPinNeedsReload(Boolean(held));
+                                        setRecoveryMessage(held ? 'This pin has an uncertain save. Your draft is kept. Check the saved pin and connections before saving again.' : '');
                                         setPinErrors({});
-                                        setPinName(selectedPin.name);
-                                        setSelectedMaps(selectedPin.maps);
+                                        setPinName(held?.draft.name ?? selectedPin.name);
+                                        setSelectedMaps(held?.draft.maps ?? selectedPin.maps);
                                         setSelectedPin(null);
-                                        setPinNotes(selectedPin.notes || '');
+                                        setPinNotes(held?.draft.notes ?? selectedPin.notes ?? '');
                                     }} />
                             </Popup>
                         )}
                     </Map>
 
                     {(newPin || editingPin) && (
-                        <Dialog returnFocusRef={editingPin ? pinFormReturnRef : undefined} label={editingPin ? 'Edit Pin' : 'Add Pin'} onClose={() => { setNewPin(null); setEditingPin(null); }} busy={pinAction.busy} error={pinAction.error} onOpen={pinAction.clear}>
+                        <Dialog returnFocusRef={editingPin ? pinFormReturnRef : undefined} label={editingPin ? 'Edit Pin' : 'Add Pin'} onClose={closePinForm} busy={pinAction.busy || recoveringPin} busyLabel={recoveringPin ? 'Checking saved pin…' : 'Saving…'} error={pinAction.error} onOpen={pinAction.clear}>
                             <div className="pin-details-popup">
                                 <h3>{editingPin ? 'Edit Pin' : 'Add Pin'}</h3>
                                 <PinFormFields editing={Boolean(editingPin)} unconfirmed={unconfirmedCreation} errors={pinErrors}
@@ -906,22 +952,20 @@ function PinSphereMap({ mapStyle }) {
                                     maps={maps} selected={selectedMaps} expanded={expandedPinMaps}
                                     onExpand={togglePinMapExpand} onMap={togglePinMap} onSubmap={togglePinSubmap} />
 
+                                {editingPin && (pinNeedsReload || recoveryMessage) && <div className="pin-recovery">
+                                    <p role="status">{recoveryMessage || 'Some changes may already be saved. Your draft is kept; check the saved pin before retrying.'}</p>
+                                    {pinNeedsReload && <button type="button" onClick={recoverPin}>Check saved pin</button>}
+                                </div>}
                                 <div className="pin-details-buttons">
                                     <button
-                                        onClick={() => {
-                                            setNewPin(null);
-                                            setEditingPin(null);
-                                            setPinName('');
-                                            setSelectedMaps([]);
-                                            setPinNotes('');
-                                        }}
+                                        onClick={closePinForm}
                                     >
                                         Cancel
                                     </button>
 
                                     <button className="pin-edit-button" disabled={pinNeedsReload}
                                         onClick={event => pinAction.run(async () => {
-                                            if (pinNeedsReload) return;
+                                            if (pinNeedsReload || (editingPin ? pinRecovery.get(editingPin.id) : pinRecovery.getCreation())) return;
                                             pinWriteStarted.current = false;
                                             setPinErrors({});
                                             if (pinName.trim() === '') {
@@ -993,8 +1037,8 @@ function PinSphereMap({ mapStyle }) {
                                                     );
                                                     pinAction.setError('Could not update the pin.');
                                                     if (!isRejectedPinWrite(pinError)) {
-                                                        setPinNeedsReload(true);
-                                                        pinAction.setError('The save could not be confirmed. Your entries are kept; close and reopen the pin to check before retrying.');
+                                                        lockPinSave();
+                                                        pinAction.setError('The save could not be confirmed. Your entries are kept; use Check saved pin before retrying.');
                                                     }
                                                     return;
                                                 }
@@ -1016,8 +1060,8 @@ function PinSphereMap({ mapStyle }) {
                                                         console.error('Error removing pin connection:', deleteMapError);
                                                         pinAction.setError('Could not remove a pin connection. Your map permissions may have changed.');
                                                         await loadPins(maps, { preserveDraft: true });
-                                                        pinAction.setError('Some changes may already be saved. Your entries are kept; close and reopen this pin to check its current connections before retrying.');
-                                                        setPinNeedsReload(true);
+                                                        pinAction.setError('Some changes may already be saved. Your entries are kept; use Check saved pin to verify its current connections before retrying.');
+                                                        lockPinSave();
                                                         return;
                                                     }
                                                 }
@@ -1068,8 +1112,8 @@ function PinSphereMap({ mapStyle }) {
                                                         );
                                                         pinAction.setError('Could not save the pin maps.');
                                                         await loadPins(maps, { preserveDraft: true });
-                                                        pinAction.setError('Some changes may already be saved. Your entries are kept; close and reopen this pin to check its current connections before retrying.');
-                                                        setPinNeedsReload(true);
+                                                        pinAction.setError('Some changes may already be saved. Your entries are kept; use Check saved pin to verify its current connections before retrying.');
+                                                        lockPinSave();
                                                         return;
                                                     }
                                                 }
@@ -1109,8 +1153,8 @@ function PinSphereMap({ mapStyle }) {
                                                     console.error('Error creating pin:', pinError);
                                                     pinAction.setError('Could not save the pin.');
                                                     if (!isRejectedPinWrite(pinError)) {
-                                                        setPinNeedsReload(true);
-                                                        setUnconfirmedCreation(true);
+                                                        lockPinSave();
+
                                                         pinAction.setError('The pin creation could not be confirmed. Your entries are kept; refresh and check All Places before adding it again.');
                                                     }
                                                     return;
@@ -1167,8 +1211,8 @@ function PinSphereMap({ mapStyle }) {
 
                                                     pinAction.setError('Could not save the pin maps.');
                                                     if (!confirmedPinRollback(newPinData.id, { data: rolledBack, error: rollbackError })) {
-                                                        setPinNeedsReload(true);
-                                                        setUnconfirmedCreation(true);
+                                                        lockPinSave();
+
                                                         pinAction.setError('The pin may have been created without all connections. Your entries are kept; close and check the map before adding it again.');
                                                     }
                                                     return;

@@ -28,7 +28,8 @@
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 6px;
-    max-height: min(45dvh, calc(100dvh - 300px), 480px);
+    box-sizing: border-box;
+    max-height: var(--search-panel-height, 45dvh);
     overflow-y: auto;
 }
 .place-search-results { padding: 0; margin: 0; list-style: none; }
@@ -42,3 +43,10 @@
 .search-preview { text-align: left; max-width: min(270px, 65vw); overflow-wrap: anywhere; }
 .search-preview p { font-size: 13px; margin: 6px 0; }
 .search-preview button { border: none; border-radius: 4px; padding: 6px 10px; }
+
+/* In a reduced visual viewport, manual placement remains available inside the
+   results panel; hide only its duplicate workspace button while results are open. */
+.map-workspace-controls:has(.place-search[data-compact="true"][data-open="true"]) { top: 8px; bottom: 24px; }
+.map-workspace-controls:has(.place-search[data-compact="true"][data-open="true"]) > .add-pin-button { display: none; }
+.place-search[data-compact="true"] .place-search-form { padding: 6px; }
+.place-search[data-compact="true"] .place-search-form input { padding: 6px; }

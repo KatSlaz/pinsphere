@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPlaceSearch, normalizeQuery, searchFeedback } from '../placeSearch'
 import './PlaceSearch.css'
+import { useSearchPanelSpace } from '../useSearchPanelSpace'
 
 export default function PlaceSearch({ getContext, onSelect, onManual }) {
   const [query, setQuery] = useState('')
@@ -13,6 +14,7 @@ export default function PlaceSearch({ getContext, onSelect, onManual }) {
   const optionRefs = useRef([])
   const id = useId()
   const lastMode = useRef('autocomplete')
+  const panelSpace = useSearchPanelSpace(rootRef, open)
   useEffect(() => {
     const controller = createPlaceSearch({ key: import.meta.env.VITE_GEOAPIFY_API_KEY,
       onState: value => { setState(value); setActiveIndex(-1) } })
@@ -42,7 +44,7 @@ export default function PlaceSearch({ getContext, onSelect, onManual }) {
   }
   const submit = event => { event.preventDefault(); if (!composing.current) search(query, 'forward') }
   const feedback = searchFeedback(state)
-  return <div ref={rootRef} className="place-search">
+  return <div ref={rootRef} className="place-search" data-compact={panelSpace.compact} data-open={open} style={{ '--search-panel-height': `${panelSpace.height}px` }}>
     <form className="place-search-form" role="search" onSubmit={submit}>
       <input aria-label="Search businesses, places, or addresses" role="combobox" aria-autocomplete="list"
         aria-expanded={open} aria-controls={`${id}-results`}
