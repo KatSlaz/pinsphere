@@ -1,0 +1,14 @@
+/* Scoped to collaboration dialogs; other map dialogs keep their existing styles. */
+.collaboration-dialog { font-size: 14px; line-height: 1.5; }
+.collaboration-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.collaboration-header h3 { min-width: 0; margin: 0; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
+.app-dialog .collaboration-close { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; font-size: 22px; line-height: 1; background: transparent; }
+.collaboration-context { color: var(--muted); overflow-wrap: anywhere; margin: -8px 0 16px; }
+.collaboration-help { color: var(--muted); font-size: 12px; margin: 8px 0 16px; }
+.app-dialog .collaboration-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.app-dialog .collaboration-primary { background: #3388ff; color: white; --button-hover-bg: #2675df; --button-active-bg: #1e63c2; }
+.app-dialog .invite-collaborator { width: 380px; padding: 20px; }
+.invite-collaborator label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+.invite-collaborator input[type="email"], .invite-collaborator select { width: 100%; padding: 8px 10px; border-radius: 5px; font-size: 14px; }
+.invite-collaborator input[type="email"] { margin-bottom: 14px; }
+.app-dialog .invite-collaborator select { margin-bottom: 0; }

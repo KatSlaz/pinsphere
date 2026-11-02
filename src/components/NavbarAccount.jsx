@@ -1,3 +1,4 @@
+import './Collaboration.css'
 import './Navbar.css';
 import AccountMenu from './AccountMenu';
 import { useNavigate } from 'react-router-dom';
@@ -41,10 +42,10 @@ function NavbarAccount({ user: providedUser }) {
             onSettings={() => navigate('/settings')} onLogout={handleLogout}
             logoutBusy={logout.busy} logoutError={logout.error} />
         {showInvitations && <Dialog returnFocusRef={accountTriggerRef} label="Invitations" onClose={() => setShowInvitations(false)} busy={Boolean(invitations.busy)} dismissOnBackdrop>
-            <div className="invitations-popup" onClick={event => event.stopPropagation()}>
-                <div className="invitations-header">
+            <div className="invitations-popup collaboration-dialog" onClick={event => event.stopPropagation()}>
+                <div className="collaboration-header">
                     <h3>Invitations</h3>
-                    <button className="invitations-close" aria-label="Close invitations" onClick={() => setShowInvitations(false)}>×</button>
+                    <button type="button" className="collaboration-close" aria-label="Close invitations" onClick={() => setShowInvitations(false)}>×</button>
                 </div>
                 <div className="invitations-feedback" aria-live="polite">
                     {invitations.loading && <p>Refreshing invitations…</p>}
@@ -61,14 +62,14 @@ function NavbarAccount({ user: providedUser }) {
                         : invitations.received.map(invitation => <div className="invitation-item" key={invitation.id}>
                             <div>
                                 <h4>{invitation.map_name}</h4>
-                                <p>{invitation.inviter_email} invited you to collaborate on this map.</p>
-                                <p>Role: {roleLabel(invitation.role)}</p>
+                                <p className="invitation-email">From {invitation.inviter_email}</p>
+                                <p className="invitation-meta">{roleLabel(invitation.role)} · Pending</p>
                             </div>
                             <div className="invitation-buttons">
-                                <button disabled={Boolean(invitations.busy)} onClick={() => invitations.act('decline', invitation)}>
+                                <button aria-label={`Decline invitation to ${invitation.map_name}`} disabled={Boolean(invitations.busy)} onClick={() => invitations.act('decline', invitation)}>
                                     {invitations.busy?.id === invitation.id && invitations.busy.kind === 'decline' ? 'Declining…' : 'Decline'}
                                 </button>
-                                <button disabled={Boolean(invitations.busy)} onClick={() => invitations.act('accept', invitation)}>
+                                <button className="collaboration-primary" aria-label={`Accept invitation to ${invitation.map_name}`} disabled={Boolean(invitations.busy)} onClick={() => invitations.act('accept', invitation)}>
                                     {invitations.busy?.id === invitation.id && invitations.busy.kind === 'accept' ? 'Accepting…' : 'Accept'}
                                 </button>
                             </div>
@@ -88,9 +89,8 @@ function NavbarAccount({ user: providedUser }) {
                             return <div className="invitation-item sent-invitation-item" key={invitation.id}>
                                 <div>
                                     <h4>{invitation.maps?.name || 'Map unavailable'}</h4>
-                                    <p>Sent to: {invitation.invitee_email}</p>
-                                    <p>Role: {roleLabel(invitation.role)}</p>
-                                    <p>Status: {statusLabel(status)}</p>
+                                    <p className="invitation-email">To {invitation.invitee_email}</p>
+                                    <p className="invitation-meta">{roleLabel(invitation.role)} · {statusLabel(status)}</p>
                                 </div>
                                 <button className="sent-invitation-remove" disabled={Boolean(invitations.busy)}
                                     title={label} aria-label={`${label} to ${invitation.invitee_email}`}

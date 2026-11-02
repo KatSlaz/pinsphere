@@ -1,3 +1,4 @@
+import './Collaboration.css'
 import Dialog from './Dialog';
 import ColorPicker from './ColorPicker';
 import { useDialogAction } from '../useDialogAction';
@@ -735,13 +736,18 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                             {sharingMap && sharingMap.id === map.id && (
                                 <Dialog label="Invite Collaborator" onClose={() => setSharingMap(null)} busy={action.busy} error={action.error} onOpen={action.clear}>
                                     <div
-                                        className="rename-popup"
+                                        className="rename-popup collaboration-dialog invite-collaborator"
                                         onClick={(event) => event.stopPropagation()}
                                     >
-                                        <h3>Invite Collaborator</h3>
+                                        <div className="collaboration-header">
+                                            <h3>Invite Collaborator</h3>
+                                            <button type="button" className="collaboration-close" aria-label="Close invite collaborator" onClick={() => setSharingMap(null)}>×</button>
+                                        </div>
+                                        <p className="collaboration-context">{sharingMap.name}</p>
+                                        <label htmlFor={`collaborator-email-${map.id}`}>Email</label>
 
                                         <input
-                                            type="email"
+                                            id={`collaborator-email-${map.id}`} type="email" autoComplete="email" autoFocus
                                             placeholder="Enter user's email"
                                             value={collaboratorEmail}
                                             onChange={(event) =>
@@ -752,14 +758,16 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                         <label htmlFor={`collaborator-role-${map.id}`}>Role</label>
                                         <select
                                             id={`collaborator-role-${map.id}`}
+                                            aria-describedby={`collaborator-role-help-${map.id}`}
                                             value={collaboratorRole}
                                             onChange={(event) => setCollaboratorRole(event.target.value)}
                                         >
                                             <option value="viewer">Viewer</option>
                                             <option value="editor">Editor</option>
                                         </select>
+                                        <p id={`collaborator-role-help-${map.id}`} className="collaboration-help">Viewer: view maps and pins. Editor: manage pins and submaps.</p>
 
-                                        <div className="rename-buttons">
+                                        <div className="rename-buttons collaboration-actions">
                                             <button
                                                 onClick={() => {
                                                     setSharingMap(null);
@@ -770,7 +778,7 @@ function MapSidebar({ isOpen, setIsOpen, maps, setMaps, currentUserId, onLeaveMa
                                                 Cancel
                                             </button>
 
-                                            <button
+                                            <button className="collaboration-primary"
                                                 onClick={event => action.run(async () => {
                                                     if (collaboratorEmail.trim() === '') { action.setError('Please enter an email address.'); return; }
 

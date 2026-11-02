@@ -1,31 +1,9 @@
 .collaborators-dialog {
-    width: min(450px, calc(100vw - 32px));
+    width: min(500px, calc(100vw - 32px));
     box-sizing: border-box;
-    padding: 24px;
+    padding: 20px;
     background: var(--surface);
     color: var(--text);
-}
-
-.collaborators-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
-.collaborators-header h3 {
-    margin: 0;
-    overflow-wrap: anywhere;
-}
-
-.collaborators-dialog button {
-    border: none;
-    border-radius: 4px;
-    padding: 6px 10px;
-}
-
-.collaborators-header button {
-    flex-shrink: 0;
 }
 
 .collaborators-list {
@@ -63,7 +41,7 @@
 
 .collaborator-controls select {
     min-width: 0;
-    padding: 4px;
+    padding: 6px 8px;
     border-radius: 4px;
 }
 
@@ -76,4 +54,13 @@
 .collaborator-role {
     flex-shrink: 0;
     color: var(--muted);
+}
+
+.collaborators-list { margin: 0; }
+.collaborators-list li:last-child { border-bottom: 0; }
+.collaborator-feedback:not(:empty) { margin-top: 5px; }
+@media (max-width: 600px) {
+    .collaborator-row { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+    .collaborator-row:has(.collaborator-controls) .collaborator-email { flex-basis: 100%; }
+    .collaborator-controls { max-width: 100%; justify-content: flex-start; }
 }

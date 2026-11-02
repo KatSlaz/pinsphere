@@ -1,3 +1,4 @@
+import './Collaboration.css'
 import { useEffect, useId, useRef, useState } from 'react'
 import Dialog, { ConfirmDialog } from './Dialog'
 import { supabase } from '../supabaseClient'
@@ -55,11 +56,12 @@ export default function CollaboratorsModal({ map, currentUserId, onClose, return
     void managerRef.current?.run(member, role)
   }
   return <Dialog label={`Collaborators — ${map.name}`} onClose={onClose} returnFocusRef={returnFocusRef}>
-    <div ref={dialogRef} className="collaborators-dialog" aria-labelledby={headingId}>
-      <div className="collaborators-header">
-        <h3 id={headingId}>Collaborators — {map.name}</h3>
-        <button type="button" onClick={onClose} aria-label="Close collaborators">Close</button>
+    <div ref={dialogRef} className="collaborators-dialog collaboration-dialog" aria-labelledby={headingId}>
+      <div className="collaboration-header">
+        <h3 id={headingId}>Collaborators</h3>
+        <button type="button" className="collaboration-close" onClick={onClose} aria-label="Close collaborators">×</button>
       </div>
+      <p className="collaboration-context">{map.name}</p>
       <div aria-live="polite" aria-busy={result.status === 'loading'}>
         {result.status === 'loading' && <p>Loading collaborators…</p>}
         {result.status === 'error' && <>
