@@ -1,4 +1,6 @@
 import Dialog from '../components/Dialog';
+import PinPopupContent from '../components/PinPopupContent';
+import PinFormFields from '../components/PinFormFields';
 import { dialogStack } from '../dialogs';
 import { useDialogAction } from '../useDialogAction';
 import { isRejectedPinWrite, confirmedPinRollback } from '../pinSaveSafety';
@@ -41,6 +43,11 @@ function PinSphereMap({ mapStyle }) {
         }
     } });
     const [pinErrors, setPinErrors] = useState({});
+    useEffect(() => {
+        if (pinAction.busy) return;
+        if (pinErrors.name) document.getElementById('pin-name')?.focus();
+        else if (pinErrors.maps) document.querySelector('.pin-map-list')?.focus();
+    }, [pinErrors, pinAction.busy]);
     //keeps track of whether the sidebar is open or closed. 
     const [sidebarOpen, setSidebarOpen] = useState(() => !window.matchMedia('(max-width: 700px)').matches);
 
@@ -53,6 +60,24 @@ function PinSphereMap({ mapStyle }) {
     const [expandedPinMaps, setExpandedPinMaps] = useState([]);
     const [pins, setPins] = useState([]);
     const [selectedPin, setSelectedPin] = useState(null);
+    const pinTriggerRef = useRef(null);
+    const pinFormReturnRef = useRef(null);
+    const closePinPopup = () => {
+        setSelectedPin(null);
+        pinTriggerRef.current?.focus({ preventScroll: true });
+    };
+    useEffect(() => {
+        if (!selectedPin) return;
+        const onEscape = event => {
+            if (event.key !== 'Escape' || dialogStack.active) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setSelectedPin(null);
+            pinTriggerRef.current?.focus({ preventScroll: true });
+        };
+        document.addEventListener('keydown', onEscape, true);
+        return () => document.removeEventListener('keydown', onEscape, true);
+    }, [selectedPin]);
     const [editingPin, setEditingPin] = useState(null);
     const [pinNotes, setPinNotes] = useState('');
     const [deletingPin, setDeletingPin] = useState(null);
@@ -833,10 +858,15 @@ function PinSphereMap({ mapStyle }) {
                                     style={{
                                         backgroundColor: getPinColor(pin)
                                     }}
-                                    title={pin.name}
+                                    title={pin.name} role="button" tabIndex={0} aria-label={`View ${pin.name}`}
+                                    onKeyDown={event => {
+                                        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); event.currentTarget.click(); }
+                                        if (event.key === 'Escape') closePinPopup();
+                                    }}
                                     onClick={(event) => {
                                         event.stopPropagation();
                                         setSearchPreview(null);
+                                        pinTriggerRef.current = event.currentTarget;
                                         setSelectedPin(pin);
                                     }}
                                 />
@@ -847,203 +877,34 @@ function PinSphereMap({ mapStyle }) {
                             <Popup
                                 longitude={selectedPin.longitude}
                                 latitude={selectedPin.latitude}
-                                onClose={() => setSelectedPin(null)}
+                                onClose={closePinPopup}
+                                maxWidth="min(340px, calc(100vw - 32px))"
                                 closeButton={true}
                                 anchor="bottom"
                             >
-                                <div className="pin-popup">
-                                    <strong>{selectedPin.name}</strong>
-
-                                    {selectedPin.notes && (
-                                        <div className="pin-popup-notes">
-                                            <span>Notes:</span>
-                                            <p>{selectedPin.notes}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="pin-popup-maps">
-                                        <span>Maps:</span>
-
-                                        {maps
-                                            .filter(map => !map.isDefault)
-                                            .map(map => {
-                                                const selectedSubmaps = map.submaps.filter(submap =>
-                                                    selectedPin.maps.includes(getSubmapSelectionId(submap.id))
-                                                );
-
-                                                const mapSelected = selectedPin.maps.includes(
-                                                    getMapSelectionId(map.id)
-                                                );
-
-                                                if (!mapSelected && selectedSubmaps.length === 0) {
-                                                    return null;
-                                                }
-
-                                                return (
-                                                    <div key={map.id} className="pin-popup-map">
-                                                        <div
-                                                            className="pin-popup-map-name"
-                                                        >
-                                                            {map.name}
-                                                        </div>
-
-                                                        {selectedSubmaps.length > 0 && (
-                                                            <div className="pin-popup-submaps">
-                                                                {selectedSubmaps.map(submap => (
-                                                                    <div
-                                                                        key={submap.id}
-                                                                        className="pin-popup-submap-name"
-                                                                    >
-                                                                        {submap.name}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-
-                                                        
-                                                    </div>
-
-                                                    
-                                                );
-                                            })}
-                                    </div>
-
-                                    {(canEditPin(selectedPin) || selectedPin.maps.length === 0 && selectedPin.userId === currentUserId) && (
-                                    <div className="pin-popup-buttons">
-                                        {canEditPin(selectedPin) && (
-                                        <button
-                                            className="pin-edit-button"
-                                            onClick={() => {
-                                                setEditingPin(selectedPin);
-                                                setPinNeedsReload(false);
-                                                setPinErrors({});
-                                                setPinName(selectedPin.name);
-                                                setSelectedMaps(selectedPin.maps);
-                                                setSelectedPin(null);
-                                                setPinNotes(selectedPin.notes || '');
-                                            }}
-                                        >
-                                            Edit Pin
-                                        </button>
-                                        )}
-
-                                        <button
-                                            className="pin-delete-button"
-                                            onClick={() => openDeletePin(selectedPin)}
-                                        >
-                                            Delete Pin Everywhere
-                                        </button>
-                                    </div>
-                                    )}
-                                </div>
+                                <PinPopupContent pin={selectedPin} maps={maps} editable={canEditPin(selectedPin)} userId={currentUserId}
+                                    onClose={closePinPopup} onDelete={() => { pinFormReturnRef.current = pinTriggerRef.current; openDeletePin(selectedPin); }} onEdit={() => {
+                                        pinFormReturnRef.current = pinTriggerRef.current;
+                                        setEditingPin(selectedPin);
+                                        setPinNeedsReload(false);
+                                        setPinErrors({});
+                                        setPinName(selectedPin.name);
+                                        setSelectedMaps(selectedPin.maps);
+                                        setSelectedPin(null);
+                                        setPinNotes(selectedPin.notes || '');
+                                    }} />
                             </Popup>
                         )}
                     </Map>
 
                     {(newPin || editingPin) && (
-                        <Dialog label={editingPin ? 'Edit Pin' : 'Add Pin'} onClose={() => { setNewPin(null); setEditingPin(null); }} busy={pinAction.busy} error={pinAction.error} onOpen={pinAction.clear}>
+                        <Dialog returnFocusRef={editingPin ? pinFormReturnRef : undefined} label={editingPin ? 'Edit Pin' : 'Add Pin'} onClose={() => { setNewPin(null); setEditingPin(null); }} busy={pinAction.busy} error={pinAction.error} onOpen={pinAction.clear}>
                             <div className="pin-details-popup">
                                 <h3>{editingPin ? 'Edit Pin' : 'Add Pin'}</h3>
-                                {!editingPin && unconfirmedCreation && <p className="field-error" role="alert">A previous pin creation could not be confirmed. Refresh the map and check All Places before adding another pin.</p>}
-                                {editingPin && (
-                                    <p>Changes to this pin's details apply everywhere it appears.</p>
-                                )}
-
-                                <input
-                                    type="text"
-                                    aria-label="Place name" aria-invalid={Boolean(pinErrors.name)} aria-describedby={pinErrors.name ? 'pin-name-error' : undefined}
-                                    placeholder="Enter place name"
-                                    value={pinName}
-                                    onChange={(event) => setPinName(event.target.value)}
-                                />
-                                {pinErrors.name && <p id="pin-name-error" className="field-error" role="alert">{pinErrors.name}</p>}
-                                <h4>Notes</h4>
-                                <textarea
-                                    aria-label="Notes"
-                                    placeholder="Add notes about this place..."
-                                    value={pinNotes}
-                                    onChange={(event) => setPinNotes(event.target.value)}
-                                    rows={4}
-                                />
-
-                                <h4>Choose Maps</h4>
-                                {pinErrors.maps && <p id="pin-maps-error" className="field-error" role="alert">{pinErrors.maps}</p>}
-
-                                <div className="pin-map-list" role="group" aria-label="Choose maps" aria-describedby={pinErrors.maps ? 'pin-maps-error' : undefined}>
-                                    {maps.filter(canEditMap).map((map) => (
-                                        <div key={map.id}>
-
-                                            {/* Parent map */}
-                                            <div className="pin-map-item">
-
-                                                <div className="pin-dropdown-container">
-                                                    <button
-                                                        className={`pin-dropdown-button ${
-                                                            map.submaps.length === 0
-                                                                ? 'pin-dropdown-button-hidden'
-                                                                : ''
-                                                        }`}
-                                                        onClick={(event) => {
-                                                            event.stopPropagation();
-                                                            togglePinMapExpand(map.id);
-                                                        }}
-                                                    >
-                                                        {expandedPinMaps.includes(map.id) ? '▾' : '▸'}
-                                                    </button>
-                                                </div>
-
-                                                <input
-                                                    type="checkbox"
-                                                    aria-label={`Include ${map.name}`}
-                                                    style={{ accentColor: map.color }}
-                                                    checked={selectedMaps.includes(getMapSelectionId(map.id))}
-                                                    disabled={!canEditMap(map)}
-                                                    onChange={() => togglePinMap(map.id)}
-                                                />
-
-                                                <span
-                                                    className="pin-map-name"
-                                                >
-                                                    {map.name}
-                                                </span>
-
-                                            </div>
-
-                                            {/* Submaps */}
-                                            {expandedPinMaps.includes(map.id) && (
-                                                <div className="pin-submap-list">
-                                                    {map.submaps.map((submap) => (
-                                                        <div
-                                                            key={submap.id}
-                                                            className="pin-submap-item"
-                                                        >
-                                                            <div className="pin-submap-spacer"></div>
-
-                                                            <input
-                                                                type="checkbox"
-                                                                aria-label={`Include ${submap.name}`}
-                                                                style={{ accentColor: submap.color }}
-                                                                checked={selectedMaps.includes(getSubmapSelectionId(submap.id))}
-                                                                disabled={!canEditMap(map)}
-                                                                onChange={() => togglePinSubmap(
-                                                                    map.id,
-                                                                    submap.id
-                                                                )}
-                                                            />
-
-                                                            <span
-                                                                className="pin-submap-name"
-                                                            >
-                                                                {submap.name}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                        </div>
-                                    ))}
-                                </div>
+                                <PinFormFields editing={Boolean(editingPin)} unconfirmed={unconfirmedCreation} errors={pinErrors}
+                                    name={pinName} notes={pinNotes} onName={setPinName} onNotes={setPinNotes}
+                                    maps={maps} selected={selectedMaps} expanded={expandedPinMaps}
+                                    onExpand={togglePinMapExpand} onMap={togglePinMap} onSubmap={togglePinSubmap} />
 
                                 <div className="pin-details-buttons">
                                     <button
@@ -1058,7 +919,7 @@ function PinSphereMap({ mapStyle }) {
                                         Cancel
                                     </button>
 
-                                    <button disabled={pinNeedsReload}
+                                    <button className="pin-edit-button" disabled={pinNeedsReload}
                                         onClick={event => pinAction.run(async () => {
                                             if (pinNeedsReload) return;
                                             pinWriteStarted.current = false;
@@ -1341,7 +1202,7 @@ function PinSphereMap({ mapStyle }) {
                     )}
 
                     {deletingPin && (
-                        <Dialog label="Delete Pin Everywhere?" onClose={() => { ++deleteCheckRef.current; setDeletingPin(null); }} busy={pinActionPending}>
+                        <Dialog returnFocusRef={pinFormReturnRef} label="Delete Pin Everywhere?" onClose={() => { ++deleteCheckRef.current; setDeletingPin(null); }} busy={pinActionPending}>
                             <div className="pin-details-popup">
                                 <h3>Delete Pin Everywhere?</h3>
 

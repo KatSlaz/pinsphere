@@ -139,169 +139,30 @@ html, body, #root {
     background: #f0f0f0;
 }
 
-.pin-details-popup {
-    background: white;
-    padding: 25px;
-    border-radius: 10px;
-    width: 350px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
-
-.pin-details-popup {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    width: 320px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
-
-.pin-details-popup h3 {
-    margin: 0 0 15px 0;
-}
-
-.pin-details-popup h4 {
-    margin: 10px 0 8px 0;
-}
-
-.pin-details-popup input[type="text"] {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 8px;
-    margin-bottom: 15px;
-}
-
-.pin-map-list {
-    max-height: 250px;
-    overflow-y: auto;
-    margin-bottom: 20px;
-}
-
-.pin-map-item {
-    margin-bottom: 4px;
-}
-
-.pin-map-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 8px;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.pin-map-row:hover {
-    background: #f5f5f5;
-}
-
-.pin-map-row input[type="checkbox"] {
-    margin: 0;
-    cursor: pointer;
-}
-
-.pin-map-name {
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.pin-submap-list {
-    margin-left: 25px;
-}
-
-.pin-details-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-.pin-details-buttons button {
-    padding: 8px 14px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 14px;
-}
-
-
-.pin-map-expand {
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    background: none;
-    cursor: pointer;
-    font-size: 10px;
-    flex-shrink: 0;
-    color: #555;
-}
-
-.pin-map-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 8px;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-.pin-map-row:hover {
-    background: #f5f5f5;
-}
-
-.pin-submap-list {
-    margin-left: 28px;
-}
-
-.pin-map-item {
-    display: flex;
-    align-items: center;
-    height: 44px;
-}
-
-.pin-dropdown-container {
-    width: 20px;
-    display: flex;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.pin-dropdown-button {
-    border: none;
-    background: none;
-    padding: 0;
-    cursor: pointer;
-    font-size: 20px;
-    color: #555;
-}
-
-.pin-dropdown-button-hidden {
-    visibility: hidden;
-}
-
-.pin-map-item input,
-.pin-submap-item input {
-    margin: 0 8px 0 8px;
-}
-
-.pin-map-name,
-.pin-submap-name {
-    font-size: 15px;
-    font-weight: 500;
-}
-
-.pin-submap-item {
-    display: flex;
-    align-items: center;
-    height: 40px;
-}
-
-.pin-submap-spacer {
-    width: 20px;
-    flex-shrink: 0;
-}
-
-.pin-submap-item input {
-    margin-left: 28px;
-}
+.pin-details-popup { padding: 20px; width: 360px; background: var(--surface); color: var(--text); }
+.pin-details-popup h3 { margin: 0 0 16px; font-size: 18px; }
+.pin-details-popup h4, .pin-field-label { display: block; margin: 14px 0 6px; font-size: 14px; font-weight: 600; }
+.pin-details-popup :is(input[type="text"], textarea) { width: 100%; padding: 8px 10px; border-radius: 5px; font-size: 14px; }
+.pin-details-popup textarea { display: block; height: 88px; min-height: 72px; resize: vertical; max-height: 30dvh; }
+.pin-form-hint { color: var(--muted); font-size: 12px; line-height: 1.5; font-weight: 400; }
+.pin-shared-notice { margin-bottom: 12px; }
+.pin-map-list { max-height: min(250px, 35dvh); overflow-y: auto; overflow-x: hidden; margin-bottom: 16px; }
+.pin-map-item { display: flex; align-items: center; min-height: 36px; gap: 4px; }
+.pin-membership-label { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; cursor: pointer; padding: 6px 2px; border-radius: 4px; }
+.pin-membership-label:hover { background: var(--hover-bg); }
+.pin-membership-label input { flex: 0 0 auto; margin: 0; }
+.pin-map-name, .pin-submap-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 400; }
+.pin-selection-count { margin-left: auto; flex-shrink: 0; color: var(--muted); font-size: 12px; }
+.pin-dropdown-button, .pin-expand-spacer { width: 24px; height: 28px; flex: 0 0 24px; }
+.app-dialog .pin-dropdown-button { padding: 0; background: transparent; display: grid; place-items: center; }
+.pin-chevron { width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid currentColor; }
+.pin-dropdown-button[aria-expanded="true"] .pin-chevron { transform: rotate(90deg); }
+.pin-submap-list { margin-left: 28px; }
+.pin-submap-list[hidden] { display: none; }
+.pin-readonly { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; overflow-wrap: anywhere; }
+.pin-readonly-children { display: block; padding-left: 12px; color: var(--muted); }
+.pin-details-buttons { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.pin-details-buttons button { font-size: 14px; }
 
 .saved-pin-marker {
     width: 18px;
@@ -316,106 +177,20 @@ html, body, #root {
     color: #333;
 }
 
-.pin-popup-maps {
-    margin-top: 8px;
-    color: #2c2c2c;
-}
-
-.pin-popup-map {
-    margin-top: 4px;
-}
-
-.pin-popup-map-name {
-    font-weight: 600;
-}
-
-.pin-popup-submaps {
-    margin-left: 12px;
-}
-
-.pin-popup-submap-name {
-    font-size: 13px;
-    margin-top: 2px;
-}
-
-.pin-popup-notes {
-    margin-top: 8px;
-}
-
-.pin-popup-notes span {
-    font-weight: bold;
-    color: #2c2c2c;
-}
-
-.pin-popup-notes p {
-    margin: 4px 0 10px;
-    white-space: pre-wrap;
-}
-
-.pin-popup strong {
-    font-size: 20px;
-    color: #333;
-}
-
-.pin-popup {
-    min-width: 180px;
-}
-
-.pin-popup > strong {
-    display: block;
-    font-size: 16px;
-    margin-bottom: 10px;
-}
-
-.pin-popup-notes {
-    margin-bottom: 10px;
-}
-
-.pin-popup-notes span,
-.pin-popup-maps > span {
-    font-weight: 600;
-}
-
-.pin-popup-notes p {
-    margin: 4px 0 0;
-}
-
-.pin-popup-maps {
-    margin-top: 8px;
-}
-
-.pin-popup-map {
-    margin-top: 5px;
-}
-
-.pin-popup-map-name {
-    font-weight: 600;
-}
-
-.pin-popup-submaps {
-    margin-left: 12px;
-}
-
-.pin-popup-submap-name {
-    font-size: 13px;
-    margin-top: 2px;
-}
-
-.pin-popup-buttons {
-    display: flex;
-    gap: 8px;
-    margin-top: 14px;
-    padding-top: 10px;
-    border-top: 1px solid #ddd;
-}
-
-.pin-popup-buttons button {
-    padding: 6px 10px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 13px;
-}
+.pin-popup { text-align: left; min-width: 0; max-height: min(440px, calc(100dvh - 150px)); overflow-y: auto; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+.pin-popup > strong { display: block; padding-right: 16px; font-size: 16px; line-height: 1.4; margin-bottom: 8px; }
+.pin-popup-notes { margin-bottom: 10px; }
+.pin-popup-notes span, .pin-popup-maps > span { font-size: 12px; font-weight: 600; }
+.pin-popup-notes p { margin: 3px 0 0; white-space: pre-wrap; }
+.pin-popup-map { margin-top: 4px; }
+.pin-popup-map-name { font-weight: 500; }
+.pin-popup-submaps { margin-left: 12px; }
+.pin-popup-submap-name { font-size: 12px; }
+.pin-popup-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.pin-popup-buttons button { padding: 6px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+:root .pin-popup-buttons .pin-delete-button { background: transparent; color: var(--text); }
+:root .pin-popup-buttons .pin-delete-button:hover { background: var(--hover-bg); }
+.saved-pin-marker:focus-visible { outline: 2px solid var(--link); outline-offset: 3px; }
 
 .pin-edit-button {
     background: #3388ff;
