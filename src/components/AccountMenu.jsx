@@ -16,7 +16,7 @@ export default function AccountMenu({ email, triggerRef, invitationCount = 0, on
     const items = menu.current.querySelectorAll('[role="menuitem"]:not(:disabled)')
     const item = initialFocus.current === 'last' ? items[items.length - 1] : items[0]
     item?.focus()
-  }, [open])
+  }, [open, logoutBusy])
   useEffect(() => {
     if (!open) return
     const outside = event => {
@@ -26,7 +26,9 @@ export default function AccountMenu({ email, triggerRef, invitationCount = 0, on
     return () => document.removeEventListener('pointerdown', outside, true)
   }, [open])
   return <div ref={container} className="navbar-account" onBlur={event => {
-    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+    // Disabling the pending logout action can blur it before focus moves to
+    // another enabled item. Keep the menu and its eventual error available.
+    if (!event.target.matches(':disabled') && !event.currentTarget.contains(event.relatedTarget)) setOpen(false)
   }}>
     <button type="button" ref={triggerRef} className="navbar-account-button"
       aria-label={email ? `Account menu for ${email}` : 'Account menu'} title={email || 'Account'}

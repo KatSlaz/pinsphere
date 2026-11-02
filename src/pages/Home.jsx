@@ -1,32 +1,44 @@
 import './Home.css'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import world from '../assets/world.svg'
+import NavbarAccount from '../components/NavbarAccount'
+import preview from '../assets/pinsphere-desktop-light.png'
 
 function Home({ session }) {
-  return (
-    <div className="home">
-        <header className="header-home">
-          <h1>PinSphere</h1>
-          <Link to={session ? '/map' : '/login'}>
-            <button className="login-button">{session ? 'My Maps' : 'Login'}</button>
-          </Link>
-        </header>
-
-        <main className="main-home">
-        <img className="world-image" src={world} alt="image of the world in white"/>
-
-          <p className="description">PinSphere is your personal map of the world. Keep track of every place you've visited,
-            add dates and memories to your trips, and watch your travel history come to life.
-            Create private maps for yourself or shared maps with family and friends, so everyone can contribute
-            their adventures and see where you've been together. Whether you're documenting past journeys or planning the next one,
-            PinSphere makes it easy to turn your travels into a map of your memories.</p>
-
-          <Link to={session ? '/map' : '/signup'}>
-            <button className="get-started-button">{session ? 'Open Map' : 'Get Started'}</button>
-          </Link>
-        </main>
-    </div>
-  )
+  const loginLink = useRef(null)
+  const hadSession = useRef(Boolean(session))
+  useEffect(() => {
+    if (hadSession.current && !session) loginLink.current?.focus({ preventScroll: true })
+    hadSession.current = Boolean(session)
+  }, [session])
+  return <div className="home">
+    <header className="home-header">
+      <Link className="home-brand" to="/" aria-label="PinSphere home">PinSphere</Link>
+      {session ? <NavbarAccount user={session.user} /> : <Link ref={loginLink} className="home-header-action" to="/login">Log in</Link>}
+    </header>
+    <main className="home-main">
+      <div className="home-intro">
+        <h1>Every place. Every journey. Together.</h1>
+        <p>Map where you've been, explore your family's travels, and keep everyone's adventures connected.</p>
+        <Link className="home-primary-action" to={session ? '/map' : '/signup'}>{session ? 'Open My Maps' : 'Get Started'}</Link>
+      </div>
+      <figure className="home-preview">
+        <div className="home-preview-frame">
+          <img src={preview} width="1659" height="926" fetchPriority="high" decoding="async"
+            alt="PinSphere showing an expanded Family Travels map with Dad, Mom, Me, and Sibling submaps and colored pins around the world."
+            aria-describedby="home-preview-caption home-preview-credits" />
+        </div>
+        <figcaption>
+          <p id="home-preview-caption">Example family travel map with sample destinations.</p>
+          <p id="home-preview-credits" className="home-preview-credits">
+            <a href="https://www.geoapify.com/">Powered by Geoapify</a>{' · '}
+            <a href="https://openmaptiles.org/">© OpenMapTiles</a>{' · '}
+            <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>
+          </p>
+        </figcaption>
+      </figure>
+    </main>
+  </div>
 }
 
 export default Home
