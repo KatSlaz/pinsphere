@@ -26,3 +26,14 @@ test('keyboard navigation wraps and supports Home/End without capturing unrelate
   assert.equal(menuFocusIndex('Enter', 0, 3), -1)
   assert.equal(menuFocusIndex('ArrowDown', 0, 0), -1)
 })
+
+test('account menu keyboard entry and reduced enabled-item lists remain navigable', () => {
+  assert.equal(menuFocusIndex('ArrowUp', -1, 3), 2)
+  assert.equal(menuFocusIndex('Home', -1, 3), 0)
+  assert.equal(menuFocusIndex('End', -1, 3), 2)
+  for (const key of ['ArrowUp', 'ArrowDown', 'Home', 'End']) {
+    assert.equal(menuFocusIndex(key, 0, 1), 0)
+    assert.equal(menuFocusIndex(key, -1, 0), -1)
+  }
+  for (const key of ['Escape', 'Tab', ' ', 'Enter']) assert.equal(menuFocusIndex(key, 0, 3), -1)
+})

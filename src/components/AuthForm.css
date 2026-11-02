@@ -1,0 +1,25 @@
+.auth-page { width: 100%; text-align: left; }
+.auth-header { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; font-size: 14px; }
+.auth-brand { font-size: 22px; font-weight: 700; text-decoration: none; }
+.auth-main { box-sizing: border-box; width: 100%; max-width: 392px; margin: 36px auto; padding: 0 24px 24px; }
+.auth-main h1 { font-size: 28px; line-height: 1.25; letter-spacing: normal; margin: 0 0 8px; }
+.auth-intro { margin: 0 0 24px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.auth-field { margin-bottom: 16px; }
+.auth-field label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.auth-field input { box-sizing: border-box; display: block; width: 100%; min-width: 0; padding: 9px 10px; border-radius: 5px; font-size: 16px; line-height: 1.4; }
+.auth-field input[readonly] { opacity: .75; }
+.auth-field-error, .auth-error { font-size: 13px; line-height: 1.5; margin: 6px 0 0; overflow-wrap: anywhere; }
+.auth-error { margin-bottom: 14px; }
+.auth-error:focus, .auth-confirmation:focus { outline: none; }
+.auth-submit { display: block; width: 100%; padding: 10px 12px; border: none; border-radius: 5px; background: #3388ff; color: white; font-size: 14px; line-height: 1.5; cursor: pointer; }
+:root .auth-submit { --button-hover-bg: #2675df; --button-active-bg: #1e63c2; }
+.auth-alternative { margin: 20px 0 0; font-size: 14px; line-height: 1.5; }
+.auth-confirmation { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.auth-confirmation p + p { margin-top: 20px; }
+.auth-page a:focus-visible { outline: 1px solid var(--link); outline-offset: 3px; border-radius: 2px; }
+.auth-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 400px) {
+  .auth-header { padding: 16px; }
+  .auth-main { padding-inline: 20px; margin-top: 24px; }
+}
+@media (max-height: 550px) { .auth-main { margin-top: 16px; margin-bottom: 16px; } }

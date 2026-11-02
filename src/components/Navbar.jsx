@@ -1,7 +1,8 @@
 import './Navbar.css';
+import AccountMenu from './AccountMenu';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useInvitations from '../useInvitations';
 import { invitationStatus } from '../invitations';
 import Dialog, { ConfirmDialog } from './Dialog';
@@ -13,7 +14,7 @@ const statusLabel = status => ({ pending: 'Pending', accepted: 'Accepted', decli
 function Navbar() {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
-    const [accountOpen, setAccountOpen] = useState(false);
+    const accountTriggerRef = useRef(null);
     const [showInvitations, setShowInvitations] = useState(false);
     const invitations = useInvitations(user?.id, showInvitations);
     const logout = useDialogAction();
@@ -35,20 +36,11 @@ function Navbar() {
     return (
         <nav className="navbar">
             <div className="navbar-title"><h2><Link to="/">PinSphere</Link></h2></div>
-            <div className="navbar-account">
-                <button className="navbar-account-button" onClick={() => setAccountOpen(!accountOpen)}>
-                    {user?.email}<span>▼</span>
-                </button>
-                {accountOpen && <>
-                    <div className="account-dropdown">
-                        <button onClick={() => setShowInvitations(!showInvitations)}>
-                            Invitations{invitations.received.length > 0 && ` (${invitations.received.length})`}
-                        </button>
-                        <button onClick={() => { setAccountOpen(false); navigate('/settings'); }}>Settings</button>
-                        <button disabled={logout.busy} onClick={handleLogout}>{logout.busy ? 'Logging out…' : 'Log Out'}</button>
-                        {logout.error && <p className="account-error" role="alert">{logout.error}</p>}
-                    </div>
-                    {showInvitations && <Dialog label="Invitations" onClose={() => setShowInvitations(false)} busy={Boolean(invitations.busy)} dismissOnBackdrop>
+            <AccountMenu email={user?.email} triggerRef={accountTriggerRef}
+                invitationCount={invitations.received.length} onInvitations={() => setShowInvitations(true)}
+                onSettings={() => navigate('/settings')} onLogout={handleLogout}
+                logoutBusy={logout.busy} logoutError={logout.error} />
+                    {showInvitations && <Dialog returnFocusRef={accountTriggerRef} label="Invitations" onClose={() => setShowInvitations(false)} busy={Boolean(invitations.busy)} dismissOnBackdrop>
                         <div className="invitations-popup" onClick={event => event.stopPropagation()}>
                             <div className="invitations-header">
                                 <h3>Invitations</h3>
@@ -115,8 +107,6 @@ function Navbar() {
                             onClose={() => setCancellingInvitation(null)}
                             onConfirm={async () => { await invitations.act('remove', cancellingInvitation); setCancellingInvitation(null); }} />}
                     </Dialog>}
-                </>}
-            </div>
         </nav>
     );
 }
