@@ -1,5 +1,7 @@
 import Dialog from '../components/Dialog';
 import PinPopupContent from '../components/PinPopupContent';
+import DeletePinDialog from '../components/DeletePinDialog';
+import { canRemovePinConnections, createPinDeletion, deletionFeedback, readDeletionMaps } from '../pinDeletion';
 import PinFormFields from '../components/PinFormFields';
 import { dialogStack } from '../dialogs';
 import { useDialogAction } from '../useDialogAction';
@@ -24,10 +26,7 @@ import { pinDraftFromPlace, searchContext } from '../placeSearch';
 const getMapSelectionId = (id) => `map:${id}`;
 const getSubmapSelectionId = (id) => `submap:${id}`;
 const canEditMap = (map) => map?.role === 'owner' || map?.role === 'editor';
-const canEditPinInMaps = (pin, maps) => maps.some(map => canEditMap(map) && (
-    pin.maps.includes(getMapSelectionId(map.id)) ||
-    map.submaps.some(submap => pin.maps.includes(getSubmapSelectionId(submap.id)))
-));
+const canEditPinInMaps = canRemovePinConnections;
 
 function PinSphereMap({ mapStyle }) {
 
@@ -84,11 +83,12 @@ function PinSphereMap({ mapStyle }) {
     const [editingPin, setEditingPin] = useState(null);
     const [pinNotes, setPinNotes] = useState('');
     const [deletingPin, setDeletingPin] = useState(null);
-    const [canDeleteEverywhere, setCanDeleteEverywhere] = useState(null);
     const [deletePermissionError, setDeletePermissionError] = useState('');
     const [pinActionPending, setPinActionPending] = useState(false);
     const pinActionRef = useRef(false);
-    const deleteCheckRef = useRef(0);
+    const [pinDeletion] = useState(() => createPinDeletion(supabase));
+    const [deleteNeedsRefresh, setDeleteNeedsRefresh] = useState(false);
+    const [deleteStatus, setDeleteStatus] = useState('');
     const [checkingUser, setCheckingUser] = useState(true);
     const [leavingMapId, setLeavingMapId] = useState(null);
     const leavingMapRef = useRef(false);
@@ -189,18 +189,18 @@ function PinSphereMap({ mapStyle }) {
         }
     };
 
-    const loadPins = useCallback(async (accessMaps, { preserveDraft = false } = {}) => {
+    const loadPins = useCallback(async (accessMaps, { preserveDraft = false, preserveDeletion = false } = {}) => {
         const requestId = ++pinLoadRef.current;
         const { data: userData, error: userError } =
             await supabase.auth.getUser();
 
         if (userError || !userData.user) {
             console.error('Error getting user:', userError);
-            return;
+            return false;
         }
 
         const userId = userData.user.id;
-        if (requestId !== pinLoadRef.current) return;
+        if (requestId !== pinLoadRef.current) return false;
         setCurrentUserId(userId);
 
         // RLS returns personal pins and pins on accessible shared maps.
@@ -208,19 +208,19 @@ function PinSphereMap({ mapStyle }) {
             .from('pins')
             .select('*');
 
-        if (requestId !== pinLoadRef.current) return;
+        if (requestId !== pinLoadRef.current) return false;
 
-        if (pinError) {
+        if (pinError || !Array.isArray(pinData)) {
             console.error('Error loading pins:', JSON.stringify(pinError, null, 2));
-            return;
+            return false;
         }
 
         if (pinData.length === 0) {
             setPins([]);
             setSelectedPin(null);
             if (!preserveDraft) setEditingPin(null);
-            setDeletingPin(null);
-            return;
+            if (!preserveDeletion) setDeletingPin(null);
+            return true;
         }
 
         // Get the map/submap connections for these pins
@@ -232,9 +232,9 @@ function PinSphereMap({ mapStyle }) {
                 pinData.map(pin => pin.id)
             );
 
-        if (pinMapError) {
+        if (pinMapError || !Array.isArray(pinMapData)) {
             console.error('Error loading pin map connections:', pinMapError);
-            return;
+            return false;
         }
 
         const loadedPins = pinData.map(pin => ({
@@ -255,13 +255,14 @@ function PinSphereMap({ mapStyle }) {
                 })
         }));
 
-        if (requestId !== pinLoadRef.current) return;
+        if (requestId !== pinLoadRef.current) return false;
         setPins(loadedPins);
         setSelectedPin(prev => prev ? loadedPins.find(pin => pin.id === prev.id) || null : null);
         if (!preserveDraft) setEditingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && canEditPinInMaps(pin, accessMaps)) ? prev : null);
-        setDeletingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && (
-            canEditPinInMaps(pin, accessMaps) || pin.maps.length === 0 && pin.userId === userId
+        if (!preserveDeletion) setDeletingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && (
+            canEditPinInMaps(pin, accessMaps)
         )) ? prev : null);
+        return true;
     }, [setCurrentUserId, setPins, setSelectedPin, setEditingPin, setDeletingPin]);
 
     useEffect(() => {
@@ -751,55 +752,36 @@ function PinSphereMap({ mapStyle }) {
         }
     };
 
-    const openDeletePin = async (pin) => {
-        const requestId = ++deleteCheckRef.current;
+    const openDeletePin = (pin) => {
+        if (!canEditPin(pin)) return;
         setDeletingPin(pin);
         setSelectedPin(null);
-        setCanDeleteEverywhere(null);
-        setDeletePermissionError('');
-
-        try {
-            // The server must check every connection, including hidden destinations.
-            const { data, error } = await supabase.rpc('can_delete_pin_everywhere', {
-                p_pin_id: pin.id
-            });
-
-            if (requestId !== deleteCheckRef.current) return;
-            if (error || typeof data !== 'boolean') {
-                throw error || new Error('Invalid deletion permission response');
-            }
-            setCanDeleteEverywhere(data);
-        } catch (error) {
-            if (requestId !== deleteCheckRef.current) return;
-            console.error('Error checking pin deletion permission:', error);
-            setCanDeleteEverywhere(false);
-            setDeletePermissionError('Could not verify deletion permission. Please try again after database support is available.');
-        }
+        const locked = pinDeletion.needsRefresh(pin.id);
+        setDeleteNeedsRefresh(locked);
+        setDeletePermissionError(locked ? 'Refresh the map to verify the previous removal before trying again.' : '');
+        setDeleteStatus('');
     };
 
-    const handleDeletePinEverywhere = async () => {
-        if (!deletingPin || canDeleteEverywhere !== true || pinActionRef.current) return;
+    const handleDeletePin = async (refreshOnly = false) => {
+        if (!deletingPin || pinActionRef.current) return;
         pinActionRef.current = true;
         setPinActionPending(true);
         try {
-            // This RPC must recheck all destinations atomically before deleting.
-            const { data, error } = await supabase.rpc('delete_pin_everywhere', {
-                p_pin_id: deletingPin.id
-            });
-            if (error || data !== true) {
-                console.error('Error deleting pin everywhere:', error);
-                setCanDeleteEverywhere(false);
-                setDeletePermissionError('Could not delete this pin everywhere. All destinations must still allow you to edit.');
-                return;
-            }
-
-            setPins(prev => prev.filter(pin => pin.id !== deletingPin.id));
-            setDeletingPin(null);
-            await loadPins(maps);
-        } catch (error) {
-            console.error('Error deleting pin everywhere:', error);
-            setCanDeleteEverywhere(false);
-            setDeletePermissionError('Could not delete the pin. Please try again.');
+            const refresh = async () => {
+                const freshMaps = await readDeletionMaps(supabase, currentUserId, maps);
+                setMaps(freshMaps);
+                return loadPins(freshMaps, { preserveDraft: true, preserveDeletion: true });
+            };
+            const result = refreshOnly
+                ? await pinDeletion.refresh(deletingPin.id, refresh)
+                : await pinDeletion.remove(deletingPin.id, pins.some(pin => pin.id === deletingPin.id && canEditPin(pin)), refresh);
+            if (!result) return;
+            const message = deletionFeedback(result);
+            setDeleteNeedsRefresh(pinDeletion.needsRefresh(deletingPin.id));
+            if (result.outcome === 'saved' && result.refreshed) {
+                setDeletingPin(null);
+                setDeleteStatus(message);
+            } else setDeletePermissionError(message);
         } finally {
             pinActionRef.current = false;
             setPinActionPending(false);
@@ -841,6 +823,7 @@ function PinSphereMap({ mapStyle }) {
                             {addingPin ? 'Cancel placement' : '+ Place Pin Manually'}
                         </button>
                     </div>
+                    {deleteStatus && <p className="workspace-sr-only" role="status">{deleteStatus}</p>}
                     <span className="workspace-sr-only" role="status">
                         {addingPin ? 'Placement active. Click the map to place a pin. Press Escape to cancel.' : 'Manual placement inactive.'}
                     </span>
@@ -926,7 +909,7 @@ function PinSphereMap({ mapStyle }) {
                                 closeButton={true}
                                 anchor="bottom"
                             >
-                                <PinPopupContent pin={selectedPin} maps={maps} editable={canEditPin(selectedPin)} userId={currentUserId}
+                                <PinPopupContent pin={selectedPin} maps={maps} editable={canEditPin(selectedPin)}
                                     onClose={closePinPopup} onDelete={() => { pinFormReturnRef.current = pinTriggerRef.current; openDeletePin(selectedPin); }} onEdit={() => {
                                         pinFormReturnRef.current = pinTriggerRef.current;
                                         const held = pinRecovery.get(selectedPin.id);
@@ -1245,42 +1228,12 @@ function PinSphereMap({ mapStyle }) {
                         </Dialog>
                     )}
 
-                    {deletingPin && (
-                        <Dialog returnFocusRef={pinFormReturnRef} label="Delete Pin Everywhere?" onClose={() => { ++deleteCheckRef.current; setDeletingPin(null); }} busy={pinActionPending}>
-                            <div className="pin-details-popup">
-                                <h3>Delete Pin Everywhere?</h3>
+                    {deletingPin && <DeletePinDialog returnFocusRef={pinFormReturnRef}
+                        busy={pinActionPending} needsRefresh={deleteNeedsRefresh} message={deletePermissionError}
+                        editable={pins.some(pin => pin.id === deletingPin.id && canEditPin(pin))}
+                        onClose={() => setDeletingPin(null)} onDelete={() => handleDeletePin()}
+                        onRefresh={() => handleDeletePin(true)} />}
 
-                                <p>
-                                    Delete "{deletingPin.name}" everywhere? This deletes the pin and all its map and submap connections.
-                                </p>
-                                {canDeleteEverywhere === null && <p>Checking deletion permission...</p>}
-                                {deletePermissionError && <p>{deletePermissionError}</p>}
-                                {canDeleteEverywhere === false && !deletePermissionError && (
-                                    <p className="pin-delete-permission-message">This pin also belongs to a map you can't edit, so it can't be deleted everywhere.</p>
-                                )}
-
-                                <div className="pin-details-buttons">
-                                    <button
-                                        disabled={pinActionPending}
-                                        onClick={() => {
-                                            ++deleteCheckRef.current;
-                                            setDeletingPin(null);
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-
-                                    <button
-                                        className="pin-delete-button"
-                                        disabled={pinActionPending || canDeleteEverywhere !== true}
-                                        onClick={handleDeletePinEverywhere}
-                                    >
-                                        {pinActionPending ? 'Deleting...' : 'Delete Pin Everywhere'}
-                                    </button>
-                                </div>
-                            </div>
-                        </Dialog>
-                    )}
                     
                 </div>
             </div>

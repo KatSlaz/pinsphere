@@ -1,6 +1,6 @@
 import { membershipState } from '../pinMemberships'
 
-export default function PinPopupContent({ pin, maps, editable, userId, onClose, onEdit, onDelete }) {
+export default function PinPopupContent({ pin, maps, editable, onClose, onEdit, onDelete }) {
   const memberships = maps.filter(map => !map.isDefault)
     .map(map => ({ map, ...membershipState(map, pin.maps) })).filter(state => state.applicable)
   return <div className="pin-popup" role="region" aria-label={pin.name}
@@ -16,9 +16,9 @@ export default function PinPopupContent({ pin, maps, editable, userId, onClose, 
         </div>}
       </div>)}
     </div>}
-    {(editable || pin.maps.length === 0 && pin.userId === userId) && <div className="pin-popup-buttons">
-      {editable && <button type="button" className="pin-edit-button" onClick={onEdit}>Edit Pin</button>}
-      <button type="button" className="pin-delete-button" onClick={onDelete}>Delete Pin Everywhere</button>
+    {editable && <div className="pin-popup-buttons">
+      <button type="button" className="pin-edit-button" onClick={onEdit}>Edit Pin</button>
+      <button type="button" className="pin-delete-button" onClick={onDelete}>Delete Pin</button>
     </div>}
   </div>
 }
