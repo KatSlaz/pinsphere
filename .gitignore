@@ -11,7 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
+# Environment configuration (keep the sanitized template trackable)
 .env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
