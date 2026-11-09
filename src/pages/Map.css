@@ -5,12 +5,20 @@ html, body, #root {
 }
 
 /* Makes the map page fill the space below the navbar. */
+.map-screen { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+.map-load-feedback { flex-shrink: 0; padding: 12px 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; text-align: left; color: var(--text); background: var(--surface); }
+.map-load-feedback p { margin: 0; line-height: 1.5; font-size: 14px; overflow-wrap: anywhere; }
+.map-load-feedback button { padding: 6px 12px; border: none; border-radius: 5px; background: var(--hover-bg); color: var(--text); cursor: pointer; }
+.map-load-feedback button:hover { background: var(--active-bg); }
+.map-load-feedback button:focus-visible { outline: 1px solid var(--link); outline-offset: 2px; }
+
 .map-page {
     --workspace-gap: 16px;
     --workspace-sidebar-width: 50px;
     position: relative;
     width: 100%;
-    height: calc(100vh - 60px);
+    flex: 1;
+    min-height: 0;
 }
 
 .map-page.sidebar-is-open { --workspace-sidebar-width: 250px; }

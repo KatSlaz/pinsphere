@@ -22,6 +22,7 @@ import { applyPersonalOrder, pinColor } from '../mapOrdering';
 import { useMapOrdering } from '../useMapOrdering';
 import PlaceSearch from '../components/PlaceSearch';
 import { pinDraftFromPlace, searchContext } from '../placeSearch';
+import { createWorkspaceLoader, readPins } from '../mapLoading';
 
 const getMapSelectionId = (id) => `map:${id}`;
 const getSubmapSelectionId = (id) => `submap:${id}`;
@@ -89,14 +90,14 @@ function PinSphereMap({ mapStyle }) {
     const [pinDeletion] = useState(() => createPinDeletion(supabase));
     const [deleteNeedsRefresh, setDeleteNeedsRefresh] = useState(false);
     const [deleteStatus, setDeleteStatus] = useState('');
-    const [checkingUser, setCheckingUser] = useState(true);
+    const [workspaceLoader] = useState(() => createWorkspaceLoader(supabase));
+    const [workspaceLoad, setWorkspaceLoad] = useState({ status: 'loading', data: null, error: '' });
     const [leavingMapId, setLeavingMapId] = useState(null);
     const leavingMapRef = useRef(false);
     const [currentUserId, setCurrentUserId] = useState(null);
     const [rawMaps, setMaps] = useState([]);
     const ordering = useMapOrdering(currentUserId, rawMaps);
     const maps = useMemo(() => applyPersonalOrder(rawMaps, ordering.order), [rawMaps, ordering.order]);
-    const [loadingMaps, setLoadingMaps] = useState(true);
     const pinLoadRef = useRef(0);
 
     const currentPinDraft = () => ({ name: pinName, notes: pinNotes, maps: [...selectedMaps], location: newPin });
@@ -191,276 +192,53 @@ function PinSphereMap({ mapStyle }) {
 
     const loadPins = useCallback(async (accessMaps, { preserveDraft = false, preserveDeletion = false } = {}) => {
         const requestId = ++pinLoadRef.current;
-        const { data: userData, error: userError } =
-            await supabase.auth.getUser();
-
-        if (userError || !userData.user) {
-            console.error('Error getting user:', userError);
-            return false;
-        }
-
-        const userId = userData.user.id;
-        if (requestId !== pinLoadRef.current) return false;
-        setCurrentUserId(userId);
-
-        // RLS returns personal pins and pins on accessible shared maps.
-        const { data: pinData, error: pinError } = await supabase
-            .from('pins')
-            .select('*');
-
-        if (requestId !== pinLoadRef.current) return false;
-
-        if (pinError || !Array.isArray(pinData)) {
-            console.error('Error loading pins:', JSON.stringify(pinError, null, 2));
-            return false;
-        }
-
-        if (pinData.length === 0) {
-            setPins([]);
-            setSelectedPin(null);
-            if (!preserveDraft) setEditingPin(null);
-            if (!preserveDeletion) setDeletingPin(null);
+        try {
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+            if (userError || !userData?.user) throw new Error('Could not verify the current user.');
+            if (requestId !== pinLoadRef.current) return false;
+            setCurrentUserId(userData.user.id);
+            const loadedPins = await readPins(supabase);
+            if (requestId !== pinLoadRef.current) return false;
+            setPins(loadedPins);
+            setSelectedPin(prev => prev ? loadedPins.find(pin => pin.id === prev.id) || null : null);
+            if (!preserveDraft) setEditingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && canEditPinInMaps(pin, accessMaps)) ? prev : null);
+            if (!preserveDeletion) setDeletingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && canEditPinInMaps(pin, accessMaps)) ? prev : null);
             return true;
-        }
-
-        // Get the map/submap connections for these pins
-        const { data: pinMapData, error: pinMapError } = await supabase
-            .from('pin_maps')
-            .select('*')
-            .in(
-                'pin_id',
-                pinData.map(pin => pin.id)
-            );
-
-        if (pinMapError || !Array.isArray(pinMapData)) {
-            console.error('Error loading pin map connections:', pinMapError);
+        } catch {
+            if (requestId === pinLoadRef.current) workspaceLoader.reportFailure();
             return false;
         }
-
-        const loadedPins = pinData.map(pin => ({
-            id: pin.id,
-            userId: pin.user_id,
-            name: pin.name,
-            longitude: pin.longitude,
-            latitude: pin.latitude,
-            notes: pin.notes || '',
-            maps: pinMapData
-                .filter(connection => connection.pin_id === pin.id)
-                .map(connection => {
-                    if (connection.map_id !== null) {
-                        return getMapSelectionId(connection.map_id);
-                    }
-
-                    return getSubmapSelectionId(connection.submap_id);
-                })
-        }));
-
-        if (requestId !== pinLoadRef.current) return false;
-        setPins(loadedPins);
-        setSelectedPin(prev => prev ? loadedPins.find(pin => pin.id === prev.id) || null : null);
-        if (!preserveDraft) setEditingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && canEditPinInMaps(pin, accessMaps)) ? prev : null);
-        if (!preserveDeletion) setDeletingPin(prev => prev && loadedPins.some(pin => pin.id === prev.id && (
-            canEditPinInMaps(pin, accessMaps)
-        )) ? prev : null);
-        return true;
-    }, [setCurrentUserId, setPins, setSelectedPin, setEditingPin, setDeletingPin]);
+    }, [workspaceLoader]);
 
     useEffect(() => {
-        const loadMaps = async () => {
-            const { data: userData } = await supabase.auth.getUser();
-
-            if (!userData.user) {
-                // App handles redirects from Supabase session changes.
-                return;
+        let pinRequest = pinLoadRef.current;
+        const unsubscribe = workspaceLoader.subscribe(state => {
+            setWorkspaceLoad(state);
+            if (state.status === 'loading') pinRequest = ++pinLoadRef.current;
+            if (state.status !== 'ready') return;
+            const data = state.data;
+            setCurrentUserId(data.userId);
+            setMaps(previous => data.maps.map(map => {
+                const old = previous.find(item => item.id === map.id);
+                return { ...map, visible: old?.visible || false, submaps: map.submaps.map(child => ({
+                    ...child, visible: old?.submaps.find(item => item.id === child.id)?.visible || false,
+                })) };
+            }));
+            // A later post-mutation pin read takes priority over this snapshot.
+            if (pinRequest === pinLoadRef.current) {
+                setPins(data.pins);
+                setSelectedPin(prev => prev ? data.pins.find(pin => pin.id === prev.id) || null : null);
             }
-
-            const userId = userData.user.id;
-            setCurrentUserId(userId);
-
-            const { data: collaboratorData, error: collaboratorError } = await supabase
-                .from('map_collaborators')
-                .select('map_id, role')
-                .eq('user_id', userId);
-
-            if (collaboratorError) {
-                console.error(
-                    'Error loading collaborator roles:',
-                    JSON.stringify(collaboratorError, null, 2)
-                );
-            }
-
-            const { data: mapData, error: mapError } = await supabase
-                .from('maps')
-                .select('*')
-                .order('sort_order', { ascending: true });
-
-            if (mapError) {
-                console.error('Error loading maps:', mapError);
-                setLoadingMaps(false);
-                setCheckingUser(false);
-                return;
-            }
-
-            // If this user has no maps yet, create their default maps.
-            const hasAllPlaces = mapData.some(
-                map =>
-                    map.user_id === userId &&
-                    map.name === 'All Places' &&
-                    map.is_default === true
-            );
-
-            if (!hasAllPlaces) {
-                const { error: insertError } = await supabase
-                    .from('maps')
-                    .upsert(
-                        [
-                            {
-                                user_id: userId,
-                                name: 'All Places',
-                                color: '#333',
-                                is_default: true,
-                                sort_order: 0
-                            },
-                            {
-                                user_id: userId,
-                                name: 'My places',
-                                color: '#ff0000',
-                                is_default: false,
-                                sort_order: 1
-                            },
-                            {
-                                user_id: userId,
-                                name: 'Family',
-                                color: '#007ba0',
-                                is_default: false,
-                                sort_order: 2
-                            }
-                        ],
-                        {
-                            onConflict: 'user_id,name',
-                            ignoreDuplicates: true
-                        }
-                    );
-
-                if (insertError) {
-                    console.error('Error creating default maps:', insertError);
-                    setLoadingMaps(false);
-                    setCheckingUser(false);
-                    return;
-                }
-
-                const { data: familyMap, error: familyMapError } = await supabase
-                    .from('maps')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .eq('name', 'Family')
-                    .single();
-
-                if (familyMapError) {
-                    console.error('Error loading Family map:', familyMapError);
-                }
-
-                if (familyMap) {
-                    const { error: submapError } = await supabase
-                        .from('submaps')
-                        .upsert(
-                            [
-                                {
-                                    map_id: familyMap.id,
-                                    name: 'Mom',
-                                    color: '#eb877b',
-                                    sort_order: 0
-                                },
-                                {
-                                    map_id: familyMap.id,
-                                    name: 'Dad',
-                                    color: '#858626',
-                                    sort_order: 1
-                                },
-                                {
-                                    map_id: familyMap.id,
-                                    name: 'Sister',
-                                    color: '#2ecc71',
-                                    sort_order: 2
-                                }
-                            ],
-                            {
-                                onConflict: 'map_id,name',
-                                ignoreDuplicates: true
-                            }
-                        );
-
-                    if (submapError) {
-                        console.error('Error creating default submaps:', submapError);
-                    }
-                }
-            }
-
-            const { data: finalMapData, error: finalMapError } = await supabase
-                .from('maps')
-                .select('*')
-                .order('sort_order', { ascending: true });
-
-            if (finalMapError) {
-                console.error('Error loading maps:', finalMapError);
-                setLoadingMaps(false);
-                setCheckingUser(false);
-                return;
-            }
-
-            const { data: submapData, error: submapError } = await supabase
-                .from('submaps')
-                .select('*')
-                .order('sort_order', { ascending: true });
-
-            if (submapError) {
-                console.error('Error loading submaps:', submapError);
-            }
-
-            const loadedMaps = finalMapData.map(map => {
-                    const collaborator = (collaboratorData || []).find(
-                        item => item.map_id === map.id
-                    );
-
-                    return {
-                        id: map.id,
-                        name: map.name,
-                        visible: false,
-                        isDefault: map.is_default === true && map.user_id === userId && map.name === 'All Places',
-                        color: map.color,
-                        sortOrder: map.sort_order,
-                        role: map.user_id === userId
-                            ? 'owner'
-                            : collaborator?.role || 'viewer',
-                        submaps: (submapData || [])
-                            .filter(submap => submap.map_id === map.id)
-                            .map(submap => ({
-                                id: submap.id,
-                                name: submap.name,
-                                visible: false,
-                                color: submap.color,
-                                sortOrder: submap.sort_order
-                        }))
-            }});
-            setMaps(loadedMaps);
-
-            setLoadingMaps(false);
-            setCheckingUser(false);
-            await loadPins(loadedMaps);
-        };
-
-        loadMaps();
-
-        const handleMapsUpdated = () => {
-            loadMaps();
-        };
-
+            // Read retries do not clear editing drafts or either recovery guard.
+        });
+        void workspaceLoader.run(true);
+        const handleMapsUpdated = () => { void workspaceLoader.run(); };
         window.addEventListener('mapsUpdated', handleMapsUpdated);
-
         return () => {
+            unsubscribe();
             window.removeEventListener('mapsUpdated', handleMapsUpdated);
         };
-        }, [loadPins]);
+    }, [workspaceLoader]);
 
     useEffect(() => {
         const map = mapRef.current?.getMap();
@@ -788,15 +566,15 @@ function PinSphereMap({ mapStyle }) {
         }
     };
 
-    if (checkingUser || loadingMaps) {
-        return <p>Loading...</p>;
-    }
-
     return (
-        <>
+        <div className="map-screen">
             <Navbar />
-
-            <div className={`map-page${sidebarOpen ? ' sidebar-is-open' : ''}`}>
+            {workspaceLoad.status !== 'ready' && <div className="map-load-feedback"
+                aria-busy={workspaceLoad.status === 'loading'}>
+                <p role={workspaceLoad.error ? 'alert' : 'status'}>{workspaceLoad.error || 'Loading your maps and pins…'}</p>
+                {workspaceLoad.error && <button type="button" onClick={() => { void workspaceLoader.run(); }}>Retry</button>}
+            </div>}
+            {workspaceLoad.data && <div className={`map-page${sidebarOpen ? ' sidebar-is-open' : ''}`}>
 
                 {/* Sidebar component that allows users to toggle visibility of maps and rename them. */}
                 <MapSidebar 
@@ -1236,8 +1014,8 @@ function PinSphereMap({ mapStyle }) {
 
                     
                 </div>
-            </div>
-        </>
+            </div>}
+        </div>
     );
 }
 
