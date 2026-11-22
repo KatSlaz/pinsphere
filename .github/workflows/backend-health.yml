@@ -1,0 +1,44 @@
+name: Backend health
+
+on:
+  schedule:
+    - cron: "37 9 * * *" # Daily, 09:37 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check Supabase database API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLIC_KEY: ${{ secrets.SUPABASE_PUBLIC_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_PUBLIC_KEY" ]]; then
+            echo "::error::Configure SUPABASE_URL and SUPABASE_PUBLIC_KEY secrets."
+            exit 1
+          fi
+
+          if ! status="$(curl \
+            --head --silent --show-error \
+            --output /dev/null \
+            --connect-timeout 10 --max-time 30 \
+            --proto '=https' \
+            --header "apikey: $SUPABASE_PUBLIC_KEY" \
+            --header "Cache-Control: no-cache" \
+            --user-agent "PinSphere-backend-health-check" \
+            --write-out '%{http_code}' \
+            "${SUPABASE_URL%/}/rest/v1/maps?select=id&limit=1")"; then
+            echo "::error::Backend check failed: HTTPS request did not complete."
+            exit 1
+          fi
+
+          case "$status" in
+            200|206) echo "Backend read check passed." ;;
+            *) echo "::error::Backend check failed: HTTP $status"; exit 1 ;;
+          esac
